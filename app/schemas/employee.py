@@ -11,10 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-PhoneNumber = Annotated[str, StringConstraints(min_length=10, max_length=13)]
-
-
-from enum import Enum
+PhoneNumber = Annotated[ str, StringConstraints(min_length=10, max_length=13, pattern=r"^[0-9]{10}$"),Field(json_schema_extra={"example": "Integer"}) ]
 
 class EmployeePosition(str, Enum):
     JUNIOR = "Junior"
@@ -38,7 +35,7 @@ class EmployeeUpdate(EmployeeBase):
     pass
 
 class EmployeePatch(BaseModel):
-    full_name: str | None = Field( default=None, min_length=1, max_length=150, pattern=r"^[A-Za-z ]+$" )
+    full_name: str | None = Field( min_length=1, max_length=150, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"})
     phone: PhoneNumber | None = Field( default=None, validation_alias=AliasChoices("phone", "phone_number"))
     hire_date: date | None = None
     position: EmployeePosition | None = None
@@ -77,7 +74,7 @@ class EmployeeResponse(BaseModel):
 
     id: int
     full_name: str
-    phone_number: str = Field(validation_alias="phone")
+    phone_number: PhoneNumber = Field(validation_alias="phone")
     hire_date: date
     position: EmployeePosition
     salary: Decimal

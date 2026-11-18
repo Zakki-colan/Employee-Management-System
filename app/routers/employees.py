@@ -9,6 +9,7 @@ from app.schemas.employee import (
     EmployeeResponse,
     EmployeeSelfUpdate,
     EmployeeUpdate,
+    EmployeePosition,
 )
 from app.services import employee_service
 from app.dependencies.auth import get_current_user
