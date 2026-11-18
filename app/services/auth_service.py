@@ -1,0 +1,177 @@
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
+from app.models.leave import Leave
+from app.models.user import User
+from app.schemas.auth import UserAccountUpdate, UserRegister, UserLogin
+from app.utils.security import (hash_password, verify_password, create_access_token)
+
+
+def register_user(data: UserRegister, db: Session):
+    exister_user = db.query(User).filter(
+        (User.email == data.email ) | (User.username == data.username)
+    ).first()
+    if exister_user: raise HTTPException(status_code=409, detail="The Username or email already exists")
+    user = User(username=data.username, email=data.email, hashed_password=hash_password(data.password), role="EMPLOYEE")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+
+def create_admin_account(data: UserRegister, db: Session):
+    existing_user = db.query(User).filter(
+        (User.email == data.email) | (User.username == data.username)
+    ).first()
+    if existing_user:
+        raise HTTPException(status_code=409, detail="The Username or email already exists")
+
+    user = User(
+        username=data.username,
+        email=data.email,
+        hashed_password=hash_password(data.password),
+        role="ADMIN",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def update_user_account(
+    user_id: int,
+    data: UserAccountUpdate,
+    db: Session,
+    actor: User,
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if user.role.upper() == "SUPER_ADMIN" and actor.id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A Super Admin account cannot be modified by another account",
+        )
+
+    update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("is_active") is False and actor.id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You cannot deactivate your own account",
+        )
+
+    if "username" in update_data:
+        existing_user = db.query(User).filter(
+            User.username == update_data["username"],
+            User.id != user_id,
+        ).first()
+        if existing_user:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
+
+    if "email" in update_data:
+        existing_user = db.query(User).filter(
+            User.email == update_data["email"],
+            User.id != user_id,
+        ).first()
+        if existing_user:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+
+    password = update_data.pop("password", None)
+    if password is not None:
+        user.hashed_password = hash_password(password)
+
+    for key, value in update_data.items():
+        setattr(user, key, value)
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def delete_user_account(user_id: int, db: Session, actor: User):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if actor.id == user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You cannot delete your own account",
+        )
+
+    if user.role.upper() == "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A Super Admin account cannot be deleted",
+        )
+
+    if user.employee:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Delete the linked employee profile before deleting this user",
+        )
+
+    has_approved_leaves = db.query(Leave.id).filter(
+        Leave.approved_by == user_id
+    ).first()
+    if has_approved_leaves:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This user is the approver for leave requests and cannot be deleted",
+        )
+
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted successfully"}
+
+
+def update_user_role(user_id: int, new_role: str, db: Session, actor: User):
+    if actor.role.upper() != "SUPER_ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Super Admin can manage user roles")
+
+    valid_roles = {"EMPLOYEE", "ADMIN", "SUPER_ADMIN"}
+    normalized_role = new_role.strip().upper()
+    if normalized_role not in valid_roles:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user role")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if normalized_role == "SUPER_ADMIN" and actor.id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the Super Admin can hold the SUPER_ADMIN role")
+
+    if user.role.upper() == "SUPER_ADMIN" and actor.id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Another Super Admin cannot be modified by this account")
+    if user.id == actor.id and normalized_role != "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You cannot change your own Super Admin role",
+        )
+
+    user.role = normalized_role
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def login_user(data: UserLogin, db: Session):
+    user = db.query(User).filter(
+        or_(
+            func.lower(User.email) == data.email.lower(),
+            User.username == data.email,
+        )
+    ).first()
+    if not user or not verify_password(
+        data.password, user.hashed_password
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your Account is InActive")
+    access_token = create_access_token(data={"sub": str(user.id)})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
