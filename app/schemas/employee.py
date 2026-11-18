@@ -20,20 +20,14 @@ class EmployeePosition(str, Enum):
     JUNIOR = "Junior"
     SENIOR = "Senior"
     TEAM_LEADER = "Team Leader"
-    PROJECT_COORDINATOR = "Project Coordinator"
-    DEVELOPER = "Developer"
-    DESIGNER = "Designer"
-    MANAGER = "Manager"
-    HR = "HR"
-    ACCOUNTANT = "Accountant"
-    SALES_REPRESENTATIVE = "Sales Representative"
+    PC = "PC"
     OTHER = "Other"
     
 class EmployeeBase(BaseModel):
     full_name: str = Field( min_length=1, max_length=150, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"})
     phone: PhoneNumber = Field( validation_alias=AliasChoices("phone", "phone_number"), json_schema_extra={"example": "9876543210"} )
     hire_date: date
-    position: EmployeePosition = Field( description="Allowed positions: Developer', 'Designer', 'Manager', 'HR', 'Accountant', 'Sales Representative' or 'Other'")
+    position: EmployeePosition = Field( description="Allowed positions: 'Junior', 'Senior', 'Team Leader', 'PC', or 'Other'")
     salary: Decimal = Field(gt=0)
     department_id: int = Field(gt=0)
 

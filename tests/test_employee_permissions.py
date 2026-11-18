@@ -1,14 +1,13 @@
 from datetime import date
-
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
 from app.databased import Base, get_db
 from app.dependencies.auth import get_current_user
 from app.main import app
 from app.models import Department, Employee, User
+from app.schemas.employee import (EmployeePosition)
 
 
 def test_employee_can_only_update_own_contact_profile():
@@ -34,7 +33,7 @@ def test_employee_can_only_update_own_contact_profile():
         full_name="Original Name",
         phone="+12345678901",
         hire_date=date(2026, 1, 1),
-        position="Developer",
+        position=EmployeePosition,
         salary=50000,
         department_id=department.id,
         user_id=user.id,
@@ -78,7 +77,7 @@ def test_employee_can_only_update_own_contact_profile():
             assert own_profile_data["full_name"] == "Original Name"
             assert own_profile_data["phone_number"] == "+12345678901"
             assert own_profile_data["hire_date"] == "2026-01-01"
-            assert own_profile_data["position"] == "Developer"
+            assert own_profile_data["position"] == EmployeePosition
             assert own_profile_data["salary"] == "50000.00"
             assert own_profile_data["department"] == {
                 "id": department.id,
@@ -109,7 +108,7 @@ def test_employee_can_only_update_own_contact_profile():
                     "full_name": "Unauthorized Employee",
                     "phone": "+12345678902",
                     "hire_date": "2026-01-01",
-                    "position": "Developer",
+                    "position": EmployeePosition,
                     "salary": 50000,
                     "department_id": employee.department_id,
                     "user_id": user.id,

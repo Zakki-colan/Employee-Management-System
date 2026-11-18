@@ -27,11 +27,12 @@ def test_create_employee_maps_schema_fields_to_model():
             db.refresh(user)
             db.refresh(department)
 
+            position = next(iter(EmployeePosition))
             data = EmployeeCreate(
                 full_name="Test Employee",
                 phone="+12345678901",
                 hire_date=date(2026, 1, 1),
-                position=EmployeePosition.DEVELOPER,
+                position=position,
                 salary=Decimal("50000"),
                 department_id=department.id,
                 user_id=user.id,
@@ -42,7 +43,7 @@ def test_create_employee_maps_schema_fields_to_model():
 
             assert response.full_name == "Test Employee"
             assert response.phone_number == "+12345678901"
-            assert response.position.value == EmployeePosition
+            assert response.position.value == position.value
             assert response.department.id == department.id
             assert response.department.name == "Engineering"
     finally:
