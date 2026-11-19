@@ -21,7 +21,7 @@ class EmployeePosition(str, Enum):
     OTHER = "Other"
     
 class EmployeeBase(BaseModel):
-    full_name: str = Field( min_length=1, max_length=100, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"})
+    full_name: str = Field( min_length=1, max_length=100, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "String"})
     phone: PhoneNumber = Field( validation_alias=AliasChoices("phone", "phone_number"), json_schema_extra={"example": "9876543210"} )
     hire_date: date
     position: EmployeePosition = Field( description="Allowed positions: 'Junior', 'Senior', 'Team Leader', 'PC', or 'Other'")
