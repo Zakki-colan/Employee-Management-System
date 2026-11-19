@@ -17,15 +17,16 @@ def get_department_by_id(department_id:int, db: Session):
 
 def create_department(data: DepartmentCreate, db: Session):
 
+    department_data = data.model_dump()
     existing = db.query(Department).filter(
-        Department.name == data.name
+        Department.name == department_data["name"]
     ).first()
 
     if existing:
         raise HTTPException(status_code=409, detail="Department Already exists"
         )
 
-    department = Department(**data.model_dump())
+    department = Department(**department_data)
     
     db.add(department)
     db.commit()
@@ -41,11 +42,11 @@ def update_department(department_id: int, data: DepartmentUpdate, db: Session):
             Department.id != department_id
         ).first()
     
-    if existing:
-        raise HTTPException(status_code=409, detail= " This Department Name is Already exists")
-    
-    department.name = data.name
-    department.description = data.description
+    update_data = data.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(department, field, value)
+
     db.commit()
     db.refresh(department)
     

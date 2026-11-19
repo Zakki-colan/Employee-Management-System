@@ -67,18 +67,27 @@ def create_employee(data: EmployeeCreate, db: Session):
         )
 
     employee = Employee(**data.model_dump())
+    try:
+        db.add(employee)
+        db.commit()
+        db.refresh(employee)
 
-    db.add(employee)
-    db.commit()
-    db.refresh(employee)
+    except Exception:
+        db.rollback()
+        raise
 
     return employee
 
 
-def update_employee(employee_id: int, data: EmployeeUpdate, db: Session):
 
+def update_employee(
+    employee_id: int,
+    data: EmployeeUpdate,
+    db: Session
+):
     employee = get_employee_by_id(employee_id, db)
 
+    # Check department
     department = db.query(Department).filter(
         Department.id == data.department_id
     ).first()
@@ -86,9 +95,10 @@ def update_employee(employee_id: int, data: EmployeeUpdate, db: Session):
     if not department:
         raise HTTPException(
             status_code=404,
-            detail="This Department is not Found"
+            detail="Department not found"
         )
 
+    # Check duplicate phone
     existing_phone = db.query(Employee).filter(
         Employee.phone == data.phone,
         Employee.id != employee_id
@@ -97,22 +107,35 @@ def update_employee(employee_id: int, data: EmployeeUpdate, db: Session):
     if existing_phone:
         raise HTTPException(
             status_code=409,
-            detail="This Phone number already exists"
+            detail="Phone number already exists"
         )
 
-    for key, value in data.model_dump().items():
-        setattr(employee, key, value)
+    # Replace all updateable fields
+    update_data = data.model_dump()
 
-    db.commit()
-    db.refresh(employee)
+    try:
+        for key, value in update_data.items():
+            setattr(employee, key, value)
+
+        db.commit()
+        db.refresh(employee)
+
+    except Exception:
+        db.rollback()
+        raise
 
     return employee
 
 
-def patch_employee(employee_id: int, data: EmployeePatch, db: Session):
 
+def patch_employee(
+    employee_id: int,
+    data: EmployeePatch,
+    db: Session
+):
     employee = get_employee_by_id(employee_id, db)
 
+    # Get only the fields sent by frontend
     update_data = data.model_dump(exclude_unset=True)
 
     if "department_id" in update_data:
@@ -123,7 +146,7 @@ def patch_employee(employee_id: int, data: EmployeePatch, db: Session):
         if not department:
             raise HTTPException(
                 status_code=404,
-                detail="This Department is not Found"
+                detail="Department not found"
             )
 
     if "phone" in update_data:
@@ -135,14 +158,19 @@ def patch_employee(employee_id: int, data: EmployeePatch, db: Session):
         if existing_phone:
             raise HTTPException(
                 status_code=409,
-                detail="This Phone number already exists"
+                detail="Phone number already exists"
             )
 
-    for key, value in update_data.items():
-        setattr(employee, key, value)
+    try:
+        for key, value in update_data.items():
+            setattr(employee, key, value)
 
-    db.commit()
-    db.refresh(employee)
+        db.commit()
+        db.refresh(employee)
+
+    except Exception:
+        db.rollback()
+        raise
 
     return employee
 

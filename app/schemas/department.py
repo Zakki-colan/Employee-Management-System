@@ -1,6 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 class DepartmentCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    
     name: str = Field(min_length=2, max_length=100,pattern=r"^[A-Za-z]", json_schema_extra={"example": "string"})
     description: str | None = Field(default=None, max_length=255, json_schema_extra={"example": "string"})
 

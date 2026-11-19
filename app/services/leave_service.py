@@ -13,6 +13,13 @@ def apply_leave(employee_id: int, data: LeaveCreate, db: Session):
         raise HTTPException(status_code=404, detail= "This Employe is not Found")
     leave = Leave(employee_id = employee_id, **data.model_dump())
     
+    existing = db.query(Leave).filter(
+        Leave.employee_id == employee_id,
+        Leave.start_date <= data.end_date,
+        Leave.end_date >= data.start_date,
+        Leave.status.in_(["PENDING", "APPROVED"])
+    ).first()
+    
     db.add(leave)
     db.commit()
     db.refresh(leave)

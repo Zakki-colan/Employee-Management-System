@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-PhoneNumber = Annotated[ str, StringConstraints( min_length=10, max_length=10, pattern=r"^[0-9]{10}$")]
+PhoneNumber = Annotated[ str, StringConstraints( min_length=10, max_length=10, pattern=r"^[6-9][0-9]{9}$")]
 
 class EmployeePosition(str, Enum):
     JUNIOR = "Junior"
@@ -21,7 +21,7 @@ class EmployeePosition(str, Enum):
     OTHER = "Other"
     
 class EmployeeBase(BaseModel):
-    full_name: str = Field( min_length=1, max_length=150, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"})
+    full_name: str = Field( min_length=1, max_length=100, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"})
     phone: PhoneNumber = Field( validation_alias=AliasChoices("phone", "phone_number"), json_schema_extra={"example": "9876543210"} )
     hire_date: date
     position: EmployeePosition = Field( description="Allowed positions: 'Junior', 'Senior', 'Team Leader', 'PC', or 'Other'")
@@ -37,8 +37,8 @@ class EmployeeUpdate(EmployeeBase):
 class EmployeePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    full_name: str | None = Field( default=None, min_length=1, max_length=150, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"} )
-    phone: PhoneNumber | None = Field( default=None, validation_alias=AliasChoices("phone", "phone_number") )
+    full_name: str | None = Field( default=None, min_length=1, max_length=100, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"} )
+    phone: PhoneNumber | None = Field( default=None, validation_alias=AliasChoices("phone", "phone_number"), json_schema_extra={"example": "9876543210"} )
     hire_date: date | None = None
     position: EmployeePosition | None = None
     salary: Decimal | None = Field(default=None, gt=0)
@@ -59,7 +59,7 @@ class EmployeeSelfUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     full_name: str | None = Field( default=None, min_length=1, max_length=100 )
-    phone: PhoneNumber | None = Field( default=None, validation_alias=AliasChoices("phone", "phone_number") )
+    phone: PhoneNumber | None = Field( default=None, validation_alias=AliasChoices("phone", "phone_number"), json_schema_extra={"example": "9876543210"} )
 
     @model_validator(mode="after")
     def validate_update_fields(self):
