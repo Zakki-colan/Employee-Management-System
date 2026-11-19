@@ -1,11 +1,10 @@
-import logging
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app import models
+import logging
 from app.routers import (auth, employees,departments, attendance, dashboard, leaves)
 from fastapi import Request
 
@@ -64,10 +63,3 @@ app.include_router( leaves.router, prefix="/leaves", tags=["Leaves"])
 
 app.include_router( dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 
-# @app.get("/", tags=["Home"])
-# def home():
-#     return { "message": "Welcome to Employee Management System API", "status": "Running" }
-
-# @app.get("/health", tags=["Health"])
-# def health_check():
-#     return { "status": "healthy" }

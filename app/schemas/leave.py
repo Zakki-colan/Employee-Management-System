@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import (BaseModel, ConfigDict, Field, model_validator )
 
 class LeaveCreate(BaseModel):
-    leave_type: str = Field(min_length=2, max_length=100)
+    leave_type: str = Field(min_length=2, max_length=100,pattern=r"^[A-Za-z]", json_schema_extra={"example": "string"})
     start_date: date
     end_date: date
     reason: str = Field(min_length=3)

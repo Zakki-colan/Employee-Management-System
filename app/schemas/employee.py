@@ -87,7 +87,7 @@ class EmployeeResponse(BaseModel):
 
     id: int
     full_name: str
-    phone_number: PhoneNumber = Field(validation_alias="phone")
+    phone_number: str = Field(validation_alias="phone")
     hire_date: date
     position: EmployeePosition
     salary: Decimal
