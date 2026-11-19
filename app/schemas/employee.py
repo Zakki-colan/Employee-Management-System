@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-PhoneNumber = Annotated[ str, StringConstraints(min_length=10, max_length=13, pattern=r"^[0-9]{10}$"),Field(json_schema_extra={"example": "Integer"}) ]
+PhoneNumber = Annotated[ str, StringConstraints( min_length=10, max_length=10, pattern=r"^[0-9]{10}$")]
 
 class EmployeePosition(str, Enum):
     JUNIOR = "Junior"
@@ -32,15 +32,28 @@ class EmployeeCreate(EmployeeBase):
     user_id: int = Field(gt=0)
 
 class EmployeeUpdate(EmployeeBase):
-    pass
+    model_config = ConfigDict(extra="forbid")
 
 class EmployeePatch(BaseModel):
-    full_name: str | None = Field( min_length=1, max_length=150, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"})
-    phone: PhoneNumber | None = Field( default=None, validation_alias=AliasChoices("phone", "phone_number"))
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str | None = Field( default=None, min_length=1, max_length=150, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"} )
+    phone: PhoneNumber | None = Field( default=None, validation_alias=AliasChoices("phone", "phone_number") )
     hire_date: date | None = None
     position: EmployeePosition | None = None
     salary: Decimal | None = Field(default=None, gt=0)
     department_id: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_patch_fields(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided")
+
+        if any( getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("Fields cannot be null")
+
+        return self
+    
 
 class EmployeeSelfUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")

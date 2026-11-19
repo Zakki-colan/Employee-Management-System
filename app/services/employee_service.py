@@ -116,7 +116,6 @@ def patch_employee(employee_id: int, data: EmployeePatch, db: Session):
     update_data = data.model_dump(exclude_unset=True)
 
     if "department_id" in update_data:
-
         department = db.query(Department).filter(
             Department.id == update_data["department_id"]
         ).first()
@@ -132,6 +131,7 @@ def patch_employee(employee_id: int, data: EmployeePatch, db: Session):
             Employee.phone == update_data["phone"],
             Employee.id != employee_id
         ).first()
+
         if existing_phone:
             raise HTTPException(
                 status_code=409,
@@ -145,7 +145,6 @@ def patch_employee(employee_id: int, data: EmployeePatch, db: Session):
     db.refresh(employee)
 
     return employee
-
 
 def update_own_profile(employee_id: int, data: EmployeeSelfUpdate, db: Session):
     employee = get_employee_by_id(employee_id, db)

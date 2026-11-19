@@ -5,7 +5,7 @@ class DepartmentCreate(BaseModel):
     description: str | None = Field(default=None, max_length=255, json_schema_extra={"example": "string"})
 
 class DepartmentUpdate(BaseModel):
-    name: str = Field(min_length=2, max_length=100)
+    name: str = Field(min_length=2, max_length=100,pattern=r"^[A-Za-z]", json_schema_extra={"example": "string"})
     description: str | None = None
 
 class DepartmentResponse(BaseModel):

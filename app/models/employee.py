@@ -7,8 +7,7 @@ class Employee(Base):
 
     id: Mapped[int] = mapped_column( Integer, primary_key=True, index=True )
     full_name: Mapped[str] = mapped_column("name", String(100), nullable=False)
-    phone: Mapped[str] = mapped_column( "phone_number", String(15), unique=True, nullable=False
-)
+    phone: Mapped[str] = mapped_column( "phone_number", String(15), unique=True, nullable=False)
     hire_date: Mapped[Date] = mapped_column(Date, nullable=False)
     position: Mapped[str] = mapped_column(String(100), nullable=False)
     salary: Mapped[Numeric] = mapped_column(Numeric(10, 2), nullable=False)
