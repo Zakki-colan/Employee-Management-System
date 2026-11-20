@@ -64,7 +64,7 @@ class EmployeePatch(BaseModel):
 class EmployeeSelfUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    full_name: EmployeeName | None = None
+    full_name: EmployeeName | None = Field( default=None, json_schema_extra={"example": "Rahul Kumar"})
     phone: PhoneNumber | None = Field( default=None, validation_alias=AliasChoices("phone", "phone_number") )
 
     @model_validator(mode="after")

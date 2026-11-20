@@ -51,12 +51,14 @@ def update_employee( employee_id: int, data: EmployeeUpdate, db: Annotated[Sessi
 def create_employee( data: EmployeeCreate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
     return employee_service.create_employee(data, db)
 
+
 @router.patch("/me", response_model=EmployeeResponse)
 def update_my_profile( data: EmployeeSelfUpdate, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
-    
     if not current_user.employee:
         raise HTTPException( status_code=404, detail="Employee profile not found" )
+
     return employee_service.update_own_profile( current_user.employee.id, data, db )
+
 @router.delete("/{employee_id}")
 def delete_employee( employee_id: int, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
     return employee_service.delete_employee(employee_id, db)
