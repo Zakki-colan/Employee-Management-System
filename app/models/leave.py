@@ -11,7 +11,7 @@ class Leave(Base):
     start_date: Mapped[date] = mapped_column( Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="Pending")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
     approved_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column( DateTime(timezone=True), server_default=func.now() )
     employee = relationship( "Employee", foreign_keys=[employee_id], back_populates="leaves", )

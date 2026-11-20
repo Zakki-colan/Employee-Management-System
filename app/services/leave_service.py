@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Session
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 from app.models.leave import Leave
 from app.models.employee import Employee
 from app.schemas.leave import LeaveCreate, LeaveDecision
@@ -11,12 +11,7 @@ def apply_leave(employee_id: int, data: LeaveCreate, db: Session):
     if not employee:
         raise HTTPException( status_code=404, detail="This Employee is not found" )
 
-    existing = db.query(Leave).filter(
-        Leave.employee_id == employee_id,
-        Leave.start_date <= data.end_date,
-        Leave.end_date >= data.start_date,
-        Leave.status.in_(["PENDING", "ACCEPTED"])
-    ).first()
+    existing = db.query(Leave).filter( Leave.employee_id == employee_id, Leave.start_date <= data.end_date, Leave.end_date >= data.start_date, Leave.status.in_(["PENDING", "ACCEPTED"]) ).first()
 
     if existing:
         raise HTTPException( status_code=409, detail="You already have a leave request for these dates" )
@@ -54,17 +49,16 @@ def review_leave( leave_id: int, data: LeaveDecision, approver_user_id: int, db:
 
     return leave
 
-def delete_leave(leave_id: int, db: Session):
 
+def delete_leave(leave_id: int, db: Session):
     leave = db.query(Leave).filter( Leave.id == leave_id ).first()
 
     if not leave:
         raise HTTPException( status_code=404, detail="Your Leave Request is not found" )
-
-    if leave.status != "PENDING":
+    if leave.status.strip().upper() != "PENDING":
         raise HTTPException( status_code=409, detail="Only pending leave requests can be deleted" )
 
     db.delete(leave)
     db.commit()
 
-    return { "message": "Your Leave Request Deleted Successfully"}
+    return { "message": "Your Leave Request Deleted Successfully" }
