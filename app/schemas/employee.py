@@ -96,3 +96,13 @@ class EmployeeResponse(BaseModel):
     salary: Decimal
     department: EmployeeDepartmentResponse
     user_id: int
+
+
+class EmployeePaginatedResponse(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    next_page: int | None
+    previous_page: int | None
+    items: list[EmployeeResponse]

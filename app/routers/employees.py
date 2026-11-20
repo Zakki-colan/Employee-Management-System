@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Query
 from typing import Annotated
 from sqlalchemy.orm import Session
 from app.databased import get_db
@@ -10,6 +10,7 @@ from app.schemas.employee import (
     EmployeeSelfUpdate,
     EmployeeUpdate,
     EmployeePosition,
+    EmployeePaginatedResponse,
 )
 from app.services import employee_service
 from app.dependencies.auth import get_current_user
@@ -17,9 +18,15 @@ from app.dependencies.permissions import get_current_admin, get_current_employee
 
 router = APIRouter()
 
-@router.get("/", response_model=list[EmployeeResponse])
-def get_employees( db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)],):
-    return employee_service.get_all_employees(db)
+
+@router.get("/", response_model=EmployeePaginatedResponse)
+def get_employees(
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+):
+    return employee_service.get_all_employees(db, page=page, page_size=page_size)
 
 
 @router.get("/{employee_id}", response_model=EmployeeResponse)

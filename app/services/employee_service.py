@@ -11,10 +11,16 @@ from app.schemas.employee import (
 )
 
 
-def get_all_employees(db: Session):
-    return db.query(Employee).options(
-        joinedload(Employee.department)
-    ).all()
+def get_all_employees(db: Session, page: int = 1, page_size: int = 10):
+    query = db.query(Employee)
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+
+    employees = []
+    if page <= total_pages:
+        employees = ( query.options(joinedload(Employee.department)) .order_by(Employee.id) .offset((page - 1) * page_size) .limit(page_size) .all() )
+
+    return { "total": total, "page": page, "page_size": page_size, "total_pages": total_pages, "next_page": page + 1 if page < total_pages else None, "previous_page": min(page - 1, total_pages) if page > 1 and total_pages else None, "items": employees, }
 
 
 def get_employee_by_id(employee_id: int, db: Session):
@@ -87,7 +93,6 @@ def update_employee(
 ):
     employee = get_employee_by_id(employee_id, db)
 
-    # Check department
     department = db.query(Department).filter(
         Department.id == data.department_id
     ).first()

@@ -175,6 +175,25 @@ def test_admin_can_list_employees_with_existing_custom_positions():
         user_id=employee_user.id,
     )
     db.add(employee)
+    db.flush()
+    next_user = User(
+        username="employee-list-second-user",
+        email="employee-list-second-user@example.com",
+        hashed_password="test-hash",
+        role="EMPLOYEE",
+    )
+    db.add(next_user)
+    db.flush()
+    next_employee = Employee(
+        full_name="Second Employee",
+        phone="9876543210",
+        hire_date=date(2026, 1, 1),
+        position="Senior",
+        salary=50000,
+        department_id=department.id,
+        user_id=next_user.id,
+    )
+    db.add(next_employee)
     db.commit()
 
     def override_get_db():
@@ -190,7 +209,36 @@ def test_admin_can_list_employees_with_existing_custom_positions():
             response = client.get("/employees/")
 
             assert response.status_code == 200
-            assert response.json()[0]["position"] == "Team Leader"
+            result = response.json()
+            assert result["page"] == 1
+            assert result["page_size"] == 10
+            assert result["total"] == 2
+            assert result["total_pages"] == 1
+            assert [item["position"] for item in result["items"]] == ["Team Leader", "Senior"]
+
+            first_page = client.get("/employees/", params={"page": 1, "page_size": 1})
+            assert first_page.status_code == 200
+            first = first_page.json()
+            assert first["total_pages"] == 2
+            assert first["previous_page"] is None
+            assert first["next_page"] == 2
+            assert [item["id"] for item in first["items"]] == [employee.id]
+
+            second_page = client.get(
+                "/employees/", params={"page": first["next_page"], "page_size": first["page_size"]}
+            )
+            assert second_page.status_code == 200
+            second = second_page.json()
+            assert second["page"] == 2
+            assert second["previous_page"] == 1
+            assert second["next_page"] is None
+            assert [item["id"] for item in second["items"]] == [next_employee.id]
+
+            past_end = client.get("/employees/", params={"page": 3, "page_size": 1})
+            assert past_end.status_code == 200
+            assert past_end.json()["items"] == []
+            assert client.get("/employees/", params={"page": 0}).status_code == 422
+            assert client.get("/employees/", params={"page_size": 101}).status_code == 422
     finally:
         app.dependency_overrides.clear()
         db.close()
