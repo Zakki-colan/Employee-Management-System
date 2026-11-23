@@ -158,20 +158,23 @@ def update_user_role(user_id: int, new_role: str, db: Session, actor: User):
 
 
 def login_user(data: UserLogin, db: Session):
-    user = db.query(User).filter(
-        or_(
-            func.lower(User.email) == data.email.lower(),
-            User.username == data.email,
-        )
-    ).first()
-    if not user or not verify_password(
-        data.password, user.hashed_password
-    ):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    user = db.query(User).filter( or_( func.lower(User.email) == data.email.lower(), User.username == data.email, ) ).first()
+
+    if not user or not verify_password( data.password, user.hashed_password ):
+        raise HTTPException( status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password" )
+
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your Account is InActive")
-    access_token = create_access_token(data={"sub": str(user.id)})
+        raise HTTPException( status_code=status.HTTP_403_FORBIDDEN, detail="Your Account is InActive" )
+
+    access_token = create_access_token( data={"sub": str(user.id)} )
+
     return {
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role
+        },
         "access_token": access_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
     }

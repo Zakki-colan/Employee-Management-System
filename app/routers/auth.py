@@ -1,43 +1,26 @@
-from typing import Annotated
 from fastapi import APIRouter, Depends, status
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from typing import Annotated
 from app.databased import get_db
-from app.dependencies.permissions import get_current_admin, get_current_super_admin
+from app.dependencies.permissions import get_current_admin
 from app.models.user import User
-from app.schemas.auth import (
-    Token,
-    UserLogin,
-    UserRegister,
-    UserResponse,
-)
-from app.services.auth_service import (
-    create_admin_account,
-    login_user,
-    register_user,
-)
+from app.schemas.auth import UserLogin, UserRegister, UserResponse
+from app.services.auth_service import register_user, login_user
+from app.utils.response import success_response
+
 
 router = APIRouter()
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(
-    data: UserRegister,
-    db: Annotated[Session, Depends(get_db)],
-    admin: Annotated[User, Depends(get_current_admin)],
-):
-    return register_user(data, db)
+@router.post("/register")
+def register( data: UserRegister, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)],):
+    user = register_user(data, db)
 
+    user_data = UserResponse.model_validate(user).model_dump(mode="json")
 
-@router.post("/login",response_model=Token)
-def login(data:UserLogin, db:Annotated[Session, Depends(get_db)]):
-    return login_user(data, db)
+    return success_response( message="User registered successfully", status_code=status.HTTP_201_CREATED, data=user_data )
 
-# @router.post("/token", response_model=Token)
-# def token(
-#     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-#     db: Annotated[Session, Depends(get_db)],
-# ):
-#     return login_user(
-#         UserLogin(email=form_data.username, password=form_data.password),
-#         db,
-#     )
+@router.post("/login")
+def login( data: UserLogin, db: Annotated[Session, Depends(get_db)]):
+    token_data = login_user(data, db)
+
+    return success_response( message="Login successful", status_code=status.HTTP_200_OK, data=token_data )

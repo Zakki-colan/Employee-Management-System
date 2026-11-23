@@ -3,69 +3,101 @@ from typing import Annotated
 from sqlalchemy.orm import Session
 from app.databased import get_db
 from app.models.user import User
-from app.schemas.employee import (
-    EmployeeCreate,
-    EmployeePatch,
-    EmployeeResponse,
-    EmployeeSelfUpdate,
-    EmployeeUpdate,
-    EmployeePosition,
-    EmployeePaginatedResponse,
-)
+from app.schemas.employee import ( EmployeeCreate, EmployeePatch, EmployeeResponse, EmployeeSelfUpdate, EmployeeUpdate, EmployeePaginatedResponse,)
 from app.services import employee_service
 from app.dependencies.auth import get_current_user
-from app.dependencies.permissions import get_current_admin, get_current_employee
+from app.dependencies.permissions import get_current_admin
+from app.utils.response import success_response
+
 
 router = APIRouter()
 
 
-@router.get("/", response_model=EmployeePaginatedResponse)
-def get_employees(
+@router.get("/")
+def get_employees( db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)], page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=100),):
+    
+    result = employee_service.get_all_employees( db, page=page, page_size=page_size )
+
+    employee_data = EmployeePaginatedResponse.model_validate( result ).model_dump(mode="json")
+
+    return success_response( message="Employees retrieved successfully", data=employee_data, status_code=status.HTTP_200_OK )
+
+
+@router.get("/{employee_id}")
+def get_employee_by_id(
+    employee_id: int,
     db: Annotated[Session, Depends(get_db)],
-    admin: Annotated[User, Depends(get_current_admin)],
-    page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
+    current_user: Annotated[User, Depends(get_current_user)]
 ):
-    return employee_service.get_all_employees(db, page=page, page_size=page_size)
-
-
-@router.get("/{employee_id}", response_model=EmployeeResponse)
-def get_employee_by_id(employee_id: int,db: Session = Depends(get_db),current_user: User = Depends(get_current_user)):
     employee = employee_service.get_employee_by_id(employee_id, db)
 
     if not employee:
-        raise HTTPException( status_code=404, detail="Employee not found" )
-
+        raise HTTPException(
+            status_code=404,
+            detail="Employee not found"
+        )
     role = current_user.role.upper()
     if role == "EMPLOYEE":
-
         if not current_user.employee:
-            raise HTTPException( status_code=404, detail="Employee profile not found")
+            raise HTTPException(
+                status_code=404,
+                detail="Employee profile not found"
+            )
 
         if current_user.employee.id != employee_id:
-            raise HTTPException( status_code=403, detail="You are not authorized to view employee profiles" )
+            raise HTTPException(
+                status_code=403,
+                detail="You are not authorized to view employee profiles"
+            )
+
     elif role not in {"ADMIN", "SUPER_ADMIN"}:
-        raise HTTPException( status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to view employee profiles" )
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to view employee profiles" )
 
-    return employee
+    employee_data = EmployeeResponse.model_validate( employee ).model_dump(mode="json")
 
-
-@router.put("/{employee_id}", response_model=EmployeeResponse)
-def update_employee( employee_id: int, data: EmployeeUpdate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
-    return employee_service.update_employee(employee_id, data, db)
-
-@router.post( "/", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
-def create_employee( data: EmployeeCreate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
-    return employee_service.create_employee(data, db)
+    return success_response( message="Employee retrieved successfully", data=employee_data, status_code=status.HTTP_200_OK )
 
 
-@router.patch("/me", response_model=EmployeeResponse)
-def update_my_profile( data: EmployeeSelfUpdate, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
-    if not current_user.employee:
-        raise HTTPException( status_code=404, detail="Employee profile not found" )
+@router.post("/")
+def create_employee( data: EmployeeCreate, db: Annotated[Session, Depends(get_db)]):
+    
+    employee = employee_service.create_employee(data, db)
 
-    return employee_service.update_own_profile( current_user.employee.id, data, db )
+    employee_data = EmployeeResponse.model_validate( employee ).model_dump(mode="json")
+
+    return success_response( message="Employee created successfully", data=employee_data, status_code=status.HTTP_201_CREATED )
+
+@router.put("/{employee_id}")
+def update_employee(
+    employee_id: int,
+    data: EmployeeUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)]):
+    
+    employee = employee_service.update_employee( employee_id, data, db )
+
+    employee_data = EmployeeResponse.model_validate( employee ).model_dump(mode="json")
+
+    return success_response( message="Employee updated successfully", data=employee_data, status_code=status.HTTP_200_OK )
+
+
+@router.patch("/me")
+def update_my_profile(
+    data: EmployeeSelfUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)]):
+    if not current_user.employee: raise HTTPException( status_code=404, detail="Employee profile not found" )
+
+    employee = employee_service.update_own_profile( current_user.employee.id, data, db )
+
+    employee_data = EmployeeResponse.model_validate( employee ).model_dump(mode="json")
+
+    return success_response( message="Your profile updated successfully", data=employee_data, status_code=status.HTTP_200_OK )
 
 @router.delete("/{employee_id}")
 def delete_employee( employee_id: int, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
-    return employee_service.delete_employee(employee_id, db)
+    employee_service.delete_employee(employee_id, db)
+
+    return success_response( message="Employee deleted successfully", data={}, status_code=status.HTTP_200_OK )

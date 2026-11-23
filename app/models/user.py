@@ -13,8 +13,5 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     role: Mapped[str] = mapped_column(String(50), nullable=False)
     employee = relationship("Employee", back_populates="user", uselist=False)
-    approved_leaves = relationship(
-        "Leave",
-        foreign_keys="Leave.approved_by",
-        back_populates="approver",
-    )
+    approved_leaves = relationship( "Leave", foreign_keys="Leave.approved_by", back_populates="approver", )
+    refresh_tokens = relationship( "RefreshToken", back_populates="user")
