@@ -5,10 +5,9 @@ from app.models.leave import Leave
 from app.models.user import User
 from app.databased import get_db
 from app.schemas.leave import (
-    LeaveBalanceAllocation,
-    LeaveBalanceResponse,
     LeaveCreate,
     LeaveDecision,
+    LeaveListResponse,
     LeaveResponse,
 )
 from app.services import leave_service
@@ -17,21 +16,6 @@ from app.dependencies.permissions import get_current_admin
 from app.utils.response import success_response
 
 router = APIRouter()
-
-
-@router.post("/balances")
-def allocate_leave_balance(
-    data: LeaveBalanceAllocation,
-    db: Annotated[Session, Depends(get_db)],
-    admin: Annotated[User, Depends(get_current_admin)],
-):
-    balance = leave_service.allocate_leave_balance(data, db)
-    balance_data = LeaveBalanceResponse.model_validate(balance).model_dump(mode="json")
-    return success_response(
-        message="Leave balance allocated successfully",
-        data=balance_data,
-        status_code=status.HTTP_201_CREATED,
-    )
 
 
 @router.post("/")
@@ -53,6 +37,18 @@ def apply_for_leave( data: LeaveCreate, db: Annotated[Session, Depends(get_db)],
     return success_response( message="Leave application submitted successfully", data=leave_data, status_code=status.HTTP_201_CREATED )
 
 
+def serialize_leave_records(leaves: list[Leave], db: Session):
+    records = []
+    for leave in leaves:
+        record = LeaveListResponse.model_validate(leave)
+        if record.leave_days == 0:
+            record.leave_days = leave_service.calculate_leave_days(
+                leave.start_date, leave.end_date, db
+            )
+        records.append(record.model_dump(mode="json"))
+    return records
+
+
 @router.get("/my-leaves")
 def get_my_leaves( db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
     if not current_user.employee:
@@ -60,16 +56,33 @@ def get_my_leaves( db: Annotated[Session, Depends(get_db)], current_user: Annota
 
     leaves = leave_service.get_employee_leaves( current_user.employee.id, db )
 
-    leave_data = [ LeaveResponse.model_validate(leave).model_dump(mode="json") for leave in leaves ]
+    leave_data = serialize_leave_records(leaves, db)
 
-    return success_response( message="Your leave records retrieved successfully", data=leave_data, status_code=status.HTTP_200_OK )
+    balances = leave_service.get_employee_leave_balances(current_user.employee.id, leaves, db)
+    return success_response(
+        message="Your leave records retrieved successfully",
+        data=leave_data,
+        status_code=status.HTTP_200_OK,
+        meta={
+            "leave_balances": [
+                {
+                    "year": balance.year,
+                    "leave_type": balance.leave_type,
+                    "total_days": balance.total_days,
+                    "used_days": balance.used_days,
+                    "remaining_days": balance.total_days - balance.used_days,
+                }
+                for balance in balances
+            ]
+        },
+    )
 
 
 @router.get("/")
 def get_all_leaves( db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
     leaves = leave_service.get_all_leaves(db)
 
-    leave_data = [ LeaveResponse.model_validate(leave).model_dump(mode="json") for leave in leaves ]
+    leave_data = serialize_leave_records(leaves, db)
 
     return success_response( message="All leave records retrieved successfully", data=leave_data, status_code=status.HTTP_200_OK )
 

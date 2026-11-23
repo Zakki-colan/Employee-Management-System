@@ -30,24 +30,6 @@ class LeaveDecision(BaseModel):
     status: Literal["ACCEPTED", "REJECTED"]
 
 
-class LeaveBalanceAllocation(BaseModel):
-    employee_id: int = Field(gt=0)
-    leave_type: Literal["Sick Leave", "Casual Leave", "Annual Leave", "Emergency Leave"]
-    year: int
-    total_days: int = Field(gt=0)
-
-
-class LeaveBalanceResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    employee_id: int
-    leave_type: str
-    year: int
-    total_days: int
-    used_days: int
-
-
 class LeaveResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -60,3 +42,8 @@ class LeaveResponse(BaseModel):
     status: str
     approved_by: int | None
     created_at: datetime | None = None
+
+
+class LeaveListResponse(LeaveResponse):
+    reason: str | None
+    leave_days: int

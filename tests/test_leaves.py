@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, timedelta
 from uuid import uuid4
 
 from app.models import Department, Employee, Leave, User
+from app.models.holiday import Holiday
 from app.utils.security import create_access_token
 
 
@@ -32,20 +33,25 @@ def test_apply_leave(client, db_session):
 
     token = create_access_token({"sub": str(user.id)})
     try:
+        leave_date = date.today() + timedelta(days=1)
+        holidays = {day for (day,) in db_session.query(Holiday.holiday_date)}
+        while leave_date.weekday() >= 5 or leave_date in holidays:
+            leave_date += timedelta(days=1)
+
         response = client.post(
             "/leaves/",
             json={
-                "leave_type": "Casual",
-                "start_date": "2026-11-18",
-                "end_date": "2026-11-19",
+                "leave_type": "Casual Leave",
+                "start_date": leave_date.isoformat(),
+                "end_date": leave_date.isoformat(),
                 "reason": "Personal work",
             },
             headers={"Authorization": f"Bearer {token}"},
         )
 
         assert response.status_code == 201
-        assert response.json()["employee_id"] == employee.id
-        assert response.json()["status"] == "Pending"
+        assert response.json()["data"]["employee_id"] == employee.id
+        assert response.json()["data"]["status"] == "PENDING"
     finally:
         db_session.rollback()
         db_session.query(Leave).filter(

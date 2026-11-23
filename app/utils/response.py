@@ -8,7 +8,9 @@ from fastapi.responses import JSONResponse
 def success_response(
     message: str,
     data: Any = None,
-    status_code: int = 200
+    status_code: int = 200,
+    *,
+    meta: dict[str, Any] | None = None,
 ):
     return JSONResponse(
         status_code=status_code,
@@ -16,7 +18,8 @@ def success_response(
             "success": True,
             "message": message,
             "status_code": status_code,
-            "data": data if data is not None else {}
+            "data": data if data is not None else {},
+            **({"meta": meta} if meta is not None else {}),
         })
     )
 

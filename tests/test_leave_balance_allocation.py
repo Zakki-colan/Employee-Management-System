@@ -9,11 +9,12 @@ from app.databased import Base, get_db
 from app.main import app
 from app.models.department import Department
 from app.models.employee import Employee
+from app.models.holiday import Holiday
 from app.models.user import User
 from app.utils.security import create_access_token
 
 
-def test_admin_can_allocate_leave_balance_once():
+def test_employee_receives_automatic_annual_leave_allowances():
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -56,7 +57,6 @@ def test_admin_can_allocate_leave_balance_once():
         db.add(employee)
         db.commit()
         db.refresh(employee)
-        employee_id = employee.id
         token = create_access_token({"sub": str(admin.id)})
         employee_token = create_access_token({"sub": str(employee_user.id)})
 
@@ -67,36 +67,67 @@ def test_admin_can_allocate_leave_balance_once():
     app.dependency_overrides[get_db] = override_get_db
     try:
         with TestClient(app) as client:
-            payload = {
-                "employee_id": employee_id,
-                "leave_type": "Casual Leave",
-                "year": 2026,
-                "total_days": 12,
-            }
-            headers = {"Authorization": f"Bearer {token}"}
-
-            response = client.post("/leaves/balances", json=payload, headers=headers)
-            assert response.status_code == 201
-            assert response.json()["data"]["total_days"] == 12
-            assert response.json()["data"]["used_days"] == 0
-
             leave_date = date.today() + timedelta(days=1)
-            while leave_date.weekday() >= 5:
+            while leave_date.weekday() != 4 or leave_date.year != (leave_date + timedelta(days=3)).year:
                 leave_date += timedelta(days=1)
+            holiday_date = leave_date + timedelta(days=3)
+            headers = {"Authorization": f"Bearer {token}"}
+            with test_session() as db:
+                db.add(Holiday(holiday_date=holiday_date, holiday_name="Test holiday"))
+                db.commit()
+            employee_headers = {"Authorization": f"Bearer {employee_token}"}
+            initial = client.get("/leaves/my-leaves", headers=employee_headers)
+            assert initial.status_code == 200
+            assert initial.json()["data"] == []
+            assert len(initial.json()["meta"]["leave_balances"]) == 4
+            paths = client.get("/openapi.json").json()["paths"]
+            assert "/leaves/balances" not in paths
+            assert "/leaves/balances/bulk" not in paths
+
             leave_response = client.post(
                 "/leaves/",
                 json={
                     "leave_type": "Casual Leave",
                     "start_date": leave_date.isoformat(),
-                    "end_date": leave_date.isoformat(),
+                    "end_date": holiday_date.isoformat(),
                     "reason": "Personal appointment",
                 },
-                headers={"Authorization": f"Bearer {employee_token}"},
+                headers=employee_headers,
             )
             assert leave_response.status_code == 201
 
-            duplicate = client.post("/leaves/balances", json=payload, headers=headers)
-            assert duplicate.status_code == 409
+            for endpoint, auth_headers in (
+                ("/leaves/my-leaves", employee_headers),
+                ("/leaves/", headers),
+            ):
+                response = client.get(endpoint, headers=auth_headers)
+                assert response.status_code == 200
+                (record,) = response.json()["data"]
+                assert record["leave_days"] == 1
+
+            my_leaves = client.get("/leaves/my-leaves", headers=employee_headers)
+            (balance,) = [
+                row for row in my_leaves.json()["meta"]["leave_balances"]
+                if row["year"] == leave_date.year and row["leave_type"] == "Casual Leave"
+            ]
+            assert balance["total_days"] == 12
+            assert balance["used_days"] == 0
+            assert balance["remaining_days"] == 12
+
+            leave_id = leave_response.json()["data"]["id"]
+            review = client.patch(
+                f"/leaves/{leave_id}/review",
+                json={"status": "ACCEPTED"},
+                headers=headers,
+            )
+            assert review.status_code == 200
+            my_leaves = client.get("/leaves/my-leaves", headers=employee_headers)
+            (balance,) = [
+                row for row in my_leaves.json()["meta"]["leave_balances"]
+                if row["year"] == leave_date.year and row["leave_type"] == "Casual Leave"
+            ]
+            assert balance["used_days"] == 1
+            assert balance["remaining_days"] == 11
     finally:
         app.dependency_overrides.clear()
         engine.dispose()
