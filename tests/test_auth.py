@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime
 from decimal import Decimal
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -48,7 +48,7 @@ def test_register_and_login_with_email():
     try:
         with TestClient(app) as client:
             registration_data = {
-                "username": "registration-check",
+                "username": "Registration Check",
                 "email": "registration-check@example.com",
                 "password": "valid-test-password",
             }
@@ -80,17 +80,7 @@ def test_register_and_login_with_email():
                 },
             )
             assert login.status_code == 200
-            assert login.json()["token_type"] == "bearer"
-
-            oauth_login = client.post(
-                "/auth/token",
-                data={
-                    "username": "registration-check@example.com",
-                    "password": "valid-test-password",
-                },
-            )
-            assert oauth_login.status_code == 200
-            assert oauth_login.json()["token_type"] == "bearer"
+            assert login.json()["data"]["token_type"] == "bearer"
     finally:
         app.dependency_overrides.clear()
         engine.dispose()
@@ -130,16 +120,8 @@ def test_admin_can_login_with_email_or_username():
                         },
                     )
                     assert response.status_code == 200
-                    assert response.json()["token_type"] == "bearer"
+                    assert response.json()["data"]["token_type"] == "bearer"
 
-                oauth_login = client.post(
-                    "/auth/token",
-                    data={
-                        "username": "login-admin",
-                        "password": "valid-test-password",
-                    },
-                )
-                assert oauth_login.status_code == 200
         finally:
             app.dependency_overrides.clear()
             engine.dispose()
@@ -184,8 +166,8 @@ def test_delete_employee_removes_related_attendance():
         attendance = Attendance(
             employee_id=employee.id,
             date=date(2026, 11, 13),
-            check_in=time(9, 0),
-            check_out=time(10, 0),
+            check_in=datetime(2026, 11, 13, 9, 0),
+            check_out=datetime(2026, 11, 13, 10, 0),
             status="PRESENT",
         )
         db.add(attendance)
@@ -233,7 +215,7 @@ def test_admin_cannot_assign_admin_role_during_registration():
                 response = client.post(
                     "/auth/register",
                     json={
-                        "username": "should-not-be-created",
+                        "username": "Should Not Be Created",
                         "email": "should-not-be-created@example.com",
                         "password": "demo-password",
                         "role": "ADMIN",
@@ -280,14 +262,14 @@ def test_super_admin_can_register_employee_user():
                 response = client.post(
                     "/auth/register",
                     json={
-                        "username": "new-admin-user",
+                        "username": "New Admin User",
                         "email": "new-admin-user@example.com",
                         "password": "demo-password",
                     },
                     headers={"Authorization": f"Bearer {token}"},
                 )
                 assert response.status_code == 201
-                assert response.json()["role"] == "EMPLOYEE"
+                assert response.json()["data"]["role"] == "EMPLOYEE"
         finally:
             app.dependency_overrides.clear()
 

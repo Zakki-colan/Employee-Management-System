@@ -4,13 +4,34 @@ from typing import Annotated
 from app.models.leave import Leave
 from app.models.user import User
 from app.databased import get_db
-from app.schemas.leave import ( LeaveCreate, LeaveDecision, LeaveResponse)
+from app.schemas.leave import (
+    LeaveBalanceAllocation,
+    LeaveBalanceResponse,
+    LeaveCreate,
+    LeaveDecision,
+    LeaveResponse,
+)
 from app.services import leave_service
 from app.dependencies.auth import ( get_current_user, get_current_user_optional)
 from app.dependencies.permissions import get_current_admin
 from app.utils.response import success_response
 
 router = APIRouter()
+
+
+@router.post("/balances")
+def allocate_leave_balance(
+    data: LeaveBalanceAllocation,
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],
+):
+    balance = leave_service.allocate_leave_balance(data, db)
+    balance_data = LeaveBalanceResponse.model_validate(balance).model_dump(mode="json")
+    return success_response(
+        message="Leave balance allocated successfully",
+        data=balance_data,
+        status_code=status.HTTP_201_CREATED,
+    )
 
 
 @router.post("/")

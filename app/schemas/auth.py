@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 class UserRegister(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -26,8 +26,17 @@ class UserAccountUpdate(BaseModel):
         return self
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Email address or username",
+    )
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def strip_login_identifier(cls, value: str) -> str:
+        return value.strip()
 
 class UserRoleUpdate(BaseModel):
     role: Literal["EMPLOYEE", "ADMIN", "SUPER_ADMIN"]

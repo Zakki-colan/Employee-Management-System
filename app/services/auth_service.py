@@ -158,7 +158,13 @@ def update_user_role(user_id: int, new_role: str, db: Session, actor: User):
 
 
 def login_user(data: UserLogin, db: Session):
-    user = db.query(User).filter( or_( func.lower(User.email) == data.email.lower(), User.username == data.email, ) ).first()
+    identifier = data.email.casefold()
+    user = db.query(User).filter(
+        or_(
+            func.lower(User.email) == identifier,
+            func.lower(User.username) == identifier,
+        )
+    ).first()
 
     if not user or not verify_password( data.password, user.hashed_password ):
         raise HTTPException( status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password" )

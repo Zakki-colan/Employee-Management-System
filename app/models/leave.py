@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from sqlalchemy import (String, Integer, DateTime, Date,  ForeignKey, Text, func)
+from sqlalchemy import (Column, String, Integer, DateTime, Date,  ForeignKey, Text, func)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.databased import Base
 
@@ -10,6 +10,7 @@ class Leave(Base):
     leave_type: Mapped[str] = mapped_column(String(50), nullable=False)
     start_date: Mapped[date] = mapped_column( Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    leave_days: Mapped[int] = mapped_column( Integer, nullable=False, default=0, server_default="0")
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
     approved_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
