@@ -1,9 +1,6 @@
-
 from typing import Any
-
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-
 
 def success_response(
     message: str,
@@ -22,7 +19,6 @@ def success_response(
             **({"meta": meta} if meta is not None else {}),
         })
     )
-
 
 def error_response(
     message: str,

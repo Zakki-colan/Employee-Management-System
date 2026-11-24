@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app import models
 import logging
-from app.routers import (auth, employees,departments, attendance, dashboard, leaves)
+from app.routers import (auth, employees,departments, attendance, dashboard, leaves, employee_document)
 from fastapi import Request
 from app.utils.response import error_response
 
@@ -76,5 +76,6 @@ app.include_router( attendance.router, prefix="/attendance", tags=["Attendance"]
 
 app.include_router( leaves.router, prefix="/leaves", tags=["Leaves"])
 
-app.include_router( dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+app.include_router( employee_document.router, prefix="/document", tags=["Employee Documents"])
 
+app.include_router( dashboard.router, prefix="/dashboard", tags=["Dashboard"])
