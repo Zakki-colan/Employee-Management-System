@@ -1,81 +1,108 @@
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from app import models
+
 import logging
-from app.routers import (auth, employees,departments, attendance, dashboard, leaves, employee_document)
-from fastapi import Request
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app import models
+from app.routers import (
+    auth,
+    employees,
+    departments,
+    attendance,
+    dashboard,
+    leaves,
+    employee_document,
+)
 from app.utils.response import error_response
 
 
-app = FastAPI( title="Employee Management System(EMS)", description= "A smart API for workforce management, employee records, leave tracking, and attendance.", version="1.0.0")
 logger = logging.getLogger(__name__)
 
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://localhost:5173"],  allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app = FastAPI(
+    title="Employee Management System(EMS)",
+    description=(
+        "A smart API for workforce management, employee records, "
+        "leave tracking, and attendance."
+    ),
+    version="1.0.0",
+)
 
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler( request: Request, exc: HTTPException):
-    return error_response( message=str(exc.detail), status_code=exc.status_code )
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler( request: Request, exc: RequestValidationError):
-    return error_response( message="Validation failed", status_code=422, data={"errors": exc.errors()} )
-
-@app.exception_handler(Exception)
-async def general_exception_handler( request: Request, exc: Exception):
-    return error_response( message="Internal server error", status_code=500 )
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_error_handler(
-    request: Request,
-    exc: RequestValidationError,
-) -> JSONResponse:
-    errors = [
-        {"field": ".".join(str(part) for part in error["loc"]),"message": error["msg"],}
-        for error in exc.errors()
-    ]
-    return JSONResponse(
-        status_code=422,
-        content={"message": "Please check the submitted information.", "errors": errors,},
-    )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(StarletteHTTPException)
-async def http_error_handler(
+async def http_exception_handler(
     request: Request,
     exc: StarletteHTTPException,
-) -> JSONResponse:
-    message = ( exc.detail if isinstance(exc.detail, str) else "The request could not be completed." )
-    return JSONResponse( status_code=exc.status_code, content={"message": message, "errors": []}, headers=exc.headers, )
+):
+    message = (
+        exc.detail
+        if isinstance(exc.detail, str)
+        else "The request could not be completed."
+    )
 
-
-@app.exception_handler(Exception)
-async def unexpected_error_handler(
-    request: Request,
-    exc: Exception,
-) -> JSONResponse:
-    logger.error( "Unhandled API error", exc_info=(type(exc), exc, exc.__traceback__), )
-    return JSONResponse(
-        status_code=500,
-        content={ "message": "An unexpected error occurred. Please try again later.", "errors": []},
+    return error_response(
+        message=message,
+        status_code=exc.status_code,
     )
 
 
-app.include_router( auth.router, prefix="/auth", tags=["Authentication"])
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+):
+    errors = [
+        {
+            "field": ".".join(str(part) for part in error["loc"]),
+            "message": error["msg"],
+        }
+        for error in exc.errors()
+    ]
 
-app.include_router( employees.router, prefix="/employees", tags=["Employees"])
+    return error_response(
+        message="Please check the submitted information.",
+        status_code=400,
+        data={"errors": errors},
+    )
 
-app.include_router( departments.router, prefix="/departments", tags=["Department"])
 
-app.include_router( attendance.router, prefix="/attendance", tags=["Attendance"])
+@app.exception_handler(Exception)
+async def general_exception_handler(
+    request: Request,
+    exc: Exception,
+):
+    logger.error(
+        "Unhandled API error",
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
 
-app.include_router( leaves.router, prefix="/leaves", tags=["Leaves"])
+    return error_response(
+        message="An unexpected error occurred. Please try again later.",
+        status_code=500,
+    )
 
-app.include_router( employee_document.router, prefix="/document", tags=["Employee Documents"])
 
-app.include_router( dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(employees.router, prefix="/employees", tags=["Employees"])
+app.include_router(departments.router, prefix="/departments", tags=["Department"])
+app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
+app.include_router(leaves.router, prefix="/leaves", tags=["Leaves"])
+app.include_router(
+    employee_document.router,
+    prefix="/document",
+    tags=["Employee Documents"],
+)
+app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])

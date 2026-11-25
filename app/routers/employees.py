@@ -1,9 +1,19 @@
-from fastapi import APIRouter, Depends, status, HTTPException, Query
+
 from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+
 from app.databased import get_db
 from app.models.user import User
-from app.schemas.employee import ( EmployeeCreate, EmployeePatch, EmployeeResponse, EmployeeSelfUpdate, EmployeeUpdate, EmployeePaginatedResponse,)
+from app.schemas.employee import (
+    EmployeeCreate,
+    EmployeePatch,
+    EmployeeResponse,
+    EmployeeSelfUpdate,
+    EmployeeUpdate,
+    EmployeePaginatedResponse,
+)
 from app.services import employee_service
 from app.dependencies.auth import get_current_user
 from app.dependencies.permissions import get_current_admin
@@ -14,90 +24,178 @@ router = APIRouter()
 
 
 @router.get("/")
-def get_employees( db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)], page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=100),):
-    
-    result = employee_service.get_all_employees( db, page=page, page_size=page_size )
+def get_employees(
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+):
+    result = employee_service.get_all_employees(
+        db,
+        page=page,
+        page_size=page_size,
+    )
 
-    employee_data = EmployeePaginatedResponse.model_validate( result ).model_dump(mode="json")
+    employee_data = EmployeePaginatedResponse.model_validate(
+        result
+    ).model_dump(mode="json")
 
-    return success_response( message="Employees retrieved successfully", data=employee_data, status_code=status.HTTP_200_OK )
+    return success_response(
+        message="Employees retrieved successfully",
+        data=employee_data,
+        status_code=status.HTTP_200_OK,
+    )
 
 
 @router.get("/{employee_id}")
 def get_employee_by_id(
     employee_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(get_current_user)],
 ):
-    employee = employee_service.get_employee_by_id(employee_id, db)
+    employee = employee_service.get_employee_by_id(
+        employee_id,
+        db,
+    )
 
-    if not employee:
-        raise HTTPException(
-            status_code=404,
-            detail="Employee not found"
-        )
     role = current_user.role.upper()
+
     if role == "EMPLOYEE":
         if not current_user.employee:
             raise HTTPException(
-                status_code=404,
-                detail="Employee profile not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Employee profile not found",
             )
 
         if current_user.employee.id != employee_id:
             raise HTTPException(
-                status_code=403,
-                detail="You are not authorized to view employee profiles"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not authorized to view this employee profile",
             )
 
     elif role not in {"ADMIN", "SUPER_ADMIN"}:
         raise HTTPException(
-            status_code=403,
-            detail="You are not authorized to view employee profiles" )
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to view employee profiles",
+        )
 
-    employee_data = EmployeeResponse.model_validate( employee ).model_dump(mode="json")
+    employee_data = EmployeeResponse.model_validate(
+        employee
+    ).model_dump(mode="json")
 
-    return success_response( message="Employee retrieved successfully", data=employee_data, status_code=status.HTTP_200_OK )
+    return success_response(
+        message="Employee retrieved successfully",
+        data=employee_data,
+        status_code=status.HTTP_200_OK,
+    )
 
 
 @router.post("/")
-def create_employee( data: EmployeeCreate, db: Annotated[Session, Depends(get_db)]):
-    
+def create_employee(
+    data: EmployeeCreate,
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],
+):
     employee = employee_service.create_employee(data, db)
 
-    employee_data = EmployeeResponse.model_validate( employee ).model_dump(mode="json")
+    employee_data = EmployeeResponse.model_validate(
+        employee
+    ).model_dump(mode="json")
 
-    return success_response( message="Employee created successfully", data=employee_data, status_code=status.HTTP_201_CREATED )
+    return success_response(
+        message="Employee created successfully",
+        data=employee_data,
+        status_code=status.HTTP_201_CREATED,
+    )
+
 
 @router.put("/{employee_id}")
 def update_employee(
     employee_id: int,
     data: EmployeeUpdate,
     db: Annotated[Session, Depends(get_db)],
-    admin: Annotated[User, Depends(get_current_admin)]):
-    
-    employee = employee_service.update_employee( employee_id, data, db )
+    admin: Annotated[User, Depends(get_current_admin)],
+):
+    employee = employee_service.update_employee(
+        employee_id,
+        data,
+        db,
+    )
 
-    employee_data = EmployeeResponse.model_validate( employee ).model_dump(mode="json")
+    employee_data = EmployeeResponse.model_validate(
+        employee
+    ).model_dump(mode="json")
 
-    return success_response( message="Employee updated successfully", data=employee_data, status_code=status.HTTP_200_OK )
+    return success_response(
+        message="Employee updated successfully",
+        data=employee_data,
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.patch("/{employee_id}")
+def patch_employee(
+    employee_id: int,
+    data: EmployeePatch,
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],
+):
+    employee = employee_service.patch_employee(
+        employee_id,
+        data,
+        db,
+    )
+
+    employee_data = EmployeeResponse.model_validate(
+        employee
+    ).model_dump(mode="json")
+
+    return success_response(
+        message="Employee updated successfully",
+        data=employee_data,
+        status_code=status.HTTP_200_OK,
+    )
 
 
 @router.patch("/me")
 def update_my_profile(
     data: EmployeeSelfUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(get_current_user)]):
-    if not current_user.employee: raise HTTPException( status_code=404, detail="Employee profile not found" )
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    if not current_user.employee:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee profile not found",
+        )
 
-    employee = employee_service.update_own_profile( current_user.employee.id, data, db )
+    employee = employee_service.update_own_profile(
+        current_user.employee.id,
+        data,
+        db,
+    )
 
-    employee_data = EmployeeResponse.model_validate( employee ).model_dump(mode="json")
+    employee_data = EmployeeResponse.model_validate(
+        employee
+    ).model_dump(mode="json")
 
-    return success_response( message="Your profile updated successfully", data=employee_data, status_code=status.HTTP_200_OK )
+    return success_response(
+        message="Your profile updated successfully",
+        data=employee_data,
+        status_code=status.HTTP_200_OK,
+    )
+
 
 @router.delete("/{employee_id}")
-def delete_employee( employee_id: int, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
+def delete_employee(
+    employee_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],
+):
     employee_service.delete_employee(employee_id, db)
 
-    return success_response( message="Employee deleted successfully", data={}, status_code=status.HTTP_200_OK )
+    return success_response(
+        message="Employee deleted successfully",
+        data={},
+        status_code=status.HTTP_200_OK,
+    )

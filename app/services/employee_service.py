@@ -48,7 +48,7 @@ def create_employee(data: EmployeeCreate, db: Session):
 
     if user.employee:
         raise HTTPException(
-            status_code=409,
+            status_code=400,
             detail="This User is Already in Employee Profile"
         )
 
@@ -68,7 +68,7 @@ def create_employee(data: EmployeeCreate, db: Session):
 
     if existing_phone:
         raise HTTPException(
-            status_code=409,
+            status_code=400,
             detail="This Phone number already exists"
         )
 
@@ -111,7 +111,7 @@ def update_employee(
 
     if existing_phone:
         raise HTTPException(
-            status_code=409,
+            status_code=400,
             detail="Phone number already exists"
         )
 
@@ -162,7 +162,7 @@ def patch_employee(
 
         if existing_phone:
             raise HTTPException(
-                status_code=409,
+                status_code=400,
                 detail="Phone number already exists"
             )
 
@@ -190,7 +190,7 @@ def update_own_profile(employee_id: int, data: EmployeeSelfUpdate, db: Session):
         ).first()
         if existing_phone:
             raise HTTPException(
-                status_code=409,
+                status_code=400,
                 detail="This Phone number already exists"
             )
 

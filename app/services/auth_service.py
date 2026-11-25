@@ -14,7 +14,7 @@ def register_user(data: UserRegister, db: Session):
     exister_user = db.query(User).filter(
         (User.email == data.email ) | (User.username == data.username)
     ).first()
-    if exister_user: raise HTTPException(status_code=409, detail="The Username or email already exists")
+    if exister_user: raise HTTPException(status_code=400, detail="The Username or email already exists")
     user = User(username=data.username, email=data.email, hashed_password=hash_password(data.password), role="EMPLOYEE")
     db.add(user)
     db.commit()
@@ -28,7 +28,7 @@ def create_admin_account(data: UserRegister, db: Session):
         (User.email == data.email) | (User.username == data.username)
     ).first()
     if existing_user:
-        raise HTTPException(status_code=409, detail="The Username or email already exists")
+        raise HTTPException(status_code=400, detail="The Username or email already exists")
 
     user = User(
         username=data.username,
@@ -42,12 +42,7 @@ def create_admin_account(data: UserRegister, db: Session):
     return user
 
 
-def update_user_account(
-    user_id: int,
-    data: UserAccountUpdate,
-    db: Session,
-    actor: User,
-):
+def update_user_account( user_id: int, data: UserAccountUpdate, db: Session, actor: User,):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -61,7 +56,7 @@ def update_user_account(
     update_data = data.model_dump(exclude_unset=True)
     if update_data.get("is_active") is False and actor.id == user.id:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot deactivate your own account",
         )
 
@@ -71,7 +66,7 @@ def update_user_account(
             User.id != user_id,
         ).first()
         if existing_user:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already exists")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
 
     if "email" in update_data:
         existing_user = db.query(User).filter(
@@ -79,7 +74,7 @@ def update_user_account(
             User.id != user_id,
         ).first()
         if existing_user:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists")
 
     password = update_data.pop("password", None)
     if password is not None:
@@ -100,7 +95,7 @@ def delete_user_account(user_id: int, db: Session, actor: User):
 
     if actor.id == user.id:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot delete your own account",
         )
 
@@ -112,7 +107,7 @@ def delete_user_account(user_id: int, db: Session, actor: User):
 
     if user.employee:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Delete the linked employee profile before deleting this user",
         )
 
@@ -121,7 +116,7 @@ def delete_user_account(user_id: int, db: Session, actor: User):
     ).first()
     if has_approved_leaves:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="This user is the approver for leave requests and cannot be deleted",
         )
 
@@ -134,7 +129,7 @@ def update_user_role(user_id: int, new_role: str, db: Session, actor: User):
     if actor.role.upper() != "SUPER_ADMIN":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Super Admin can manage user roles")
 
-    valid_roles = {"EMPLOYEE", "ADMIN", "SUPER_ADMIN"}
+    valid_roles = { "EMPLOYEE", "ADMIN", "SUPER_ADMIN", "MANAGER", "HR", "PROJECT_COORDINATOR",}
     normalized_role = new_role.strip().upper()
     if normalized_role not in valid_roles:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user role")
@@ -150,7 +145,7 @@ def update_user_role(user_id: int, new_role: str, db: Session, actor: User):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Another Super Admin cannot be modified by this account")
     if user.id == actor.id and normalized_role != "SUPER_ADMIN":
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot change your own Super Admin role",
         )
 

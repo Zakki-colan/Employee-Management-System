@@ -8,4 +8,5 @@ class EmployeeDocumentResponse(BaseModel):
     employee_id: int
     document_name: str
     document_type: str
+    document_url: str
     uploaded_at: datetime

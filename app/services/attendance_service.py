@@ -55,7 +55,7 @@ def check_in(employee_id: int, db: Session):
     ).with_for_update().first()
 
     if open_attendance:
-        raise HTTPException( status_code=409, detail="Please complete your previous check-out first." )
+        raise HTTPException( status_code=400, detail="Please complete your previous check-out first." )
 
     current_time = utc_now()
     attendance = Attendance( employee_id=employee_id, date=today, check_in=current_time, status="PRESENT")
@@ -66,7 +66,7 @@ def check_in(employee_id: int, db: Session):
         db.refresh(attendance)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Please complete your previous check-out first.")
+        raise HTTPException(status_code=400, detail="Please complete your previous check-out first.")
 
     return attendance
 

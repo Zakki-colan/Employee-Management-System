@@ -23,7 +23,7 @@ def create_department(data: DepartmentCreate, db: Session):
     ).first()
 
     if existing:
-        raise HTTPException(status_code=409, detail="Department Already exists"
+        raise HTTPException(status_code=400, detail="Department Already exists"
         )
 
     department = Department(**department_data)
@@ -34,28 +34,43 @@ def create_department(data: DepartmentCreate, db: Session):
     
     return department
 
-def update_department(department_id: int, data: DepartmentUpdate, db: Session):
+
+def update_department(
+    department_id: int,
+    data: DepartmentUpdate,
+    db: Session,
+):
     department = get_department_by_id(department_id, db)
-    
+
     existing = db.query(Department).filter(
-            Department.name == data.name,
-            Department.id != department_id
-        ).first()
-    
+        Department.name == data.name,
+        Department.id != department_id,
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Department name already exists",
+        )
+
     update_data = data.model_dump(exclude_unset=True)
 
     for field, value in update_data.items():
         setattr(department, field, value)
 
-    db.commit()
-    db.refresh(department)
-    
+    try:
+        db.commit()
+        db.refresh(department)
+    except Exception:
+        db.rollback()
+        raise
+
     return department
 
 def delete_department(department_id: int, db: Session):
     department = get_department_by_id(department_id, db)
     if department.employees:
-        raise HTTPException(status_code=409, detail= "We Cannot Delete This Department with Employees")
+        raise HTTPException(status_code=400, detail= "We Cannot Delete This Department with Employees")
     
     db.delete(department)
     db.commit()

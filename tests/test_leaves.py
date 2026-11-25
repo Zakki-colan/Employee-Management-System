@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from app.models import Department, Employee, Leave, User
 from app.models.holiday import Holiday
+from app.models.leave_type import LeaveType
 from app.utils.security import create_access_token
 
 
@@ -41,7 +42,7 @@ def test_apply_leave(client, db_session):
         response = client.post(
             "/leaves/",
             json={
-                "leave_type": "Casual Leave",
+                "leave_type_id": db_session.query(LeaveType.id).filter_by(name="Casual Leave").scalar(),
                 "start_date": leave_date.isoformat(),
                 "end_date": leave_date.isoformat(),
                 "reason": "Personal work",

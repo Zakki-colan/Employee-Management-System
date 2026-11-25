@@ -1,41 +1,56 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Annotated
+from pydantic import BaseModel
 from app.models.leave import Leave
 from app.models.user import User
 from app.databased import get_db
-from app.schemas.leave import (
-    LeaveCreate,
-    LeaveDecision,
-    LeaveListResponse,
-    LeaveResponse,
-)
+from app.schemas.leave import ( LeaveCreate, LeaveDecision, LeaveListResponse, LeaveResponse, LeaveHistoryStatus,)
 from app.services import leave_service
-from app.dependencies.auth import ( get_current_user, get_current_user_optional)
+from app.dependencies.auth import ( get_current_user, get_current_user_optional,)
 from app.dependencies.permissions import get_current_admin
-from app.utils.response import success_response
+from app.utils.response import error_response, success_response
 
 router = APIRouter()
 
 
+class LeaveAssign(BaseModel):
+    assigned_to_user_id: int
+
+
 @router.post("/")
-def apply_for_leave( data: LeaveCreate, db: Annotated[Session, Depends(get_db)],
+def apply_for_leave(
+    data: LeaveCreate,
+    db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[
-        User | None,
-        Depends(get_current_user_optional)
+        User | None, Depends(get_current_user_optional)
     ] = None,):
     if current_user is None:
-        raise HTTPException( status_code=401, detail="Authentication required" )
-
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required",
+        )
     if not current_user.employee:
-        raise HTTPException( status_code=400, detail="Employee profile not found" )
-
-    leave = leave_service.apply_leave( current_user.employee.id, data, db )
-
-    leave_data = LeaveResponse.model_validate( leave ).model_dump(mode="json")
-
-    return success_response( message="Leave application submitted successfully", data=leave_data, status_code=status.HTTP_201_CREATED )
-
+        raise HTTPException(
+            status_code=400,
+            detail="Employee profile not found",
+        )
+    try:
+        leave = leave_service.apply_leave(current_user.employee.id, data, db)
+    except leave_service.InvalidLeaveType as exc:
+        return error_response(
+            message=exc.detail,
+            status_code=exc.status_code,
+            data={"available_leave_types": exc.available_types},
+        )
+    leave_data = LeaveResponse.model_validate(
+        leave
+    ).model_dump(mode="json")
+    return success_response(
+        message="Leave application submitted successfully",
+        data=leave_data,
+        status_code=status.HTTP_201_CREATED,
+    )
 
 def serialize_leave_records(leaves: list[Leave], db: Session):
     records = []
@@ -43,22 +58,56 @@ def serialize_leave_records(leaves: list[Leave], db: Session):
         record = LeaveListResponse.model_validate(leave)
         if record.leave_days == 0:
             record.leave_days = leave_service.calculate_leave_days(
-                leave.start_date, leave.end_date, db
-            )
+                leave.start_date,
+                leave.end_date,
+                db, )
         records.append(record.model_dump(mode="json"))
     return records
 
 
-@router.get("/my-leaves")
-def get_my_leaves( db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
+@router.get("/types")
+def get_leave_types(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return success_response(
+        message="Available leave types retrieved successfully",
+        data=[
+            {"id": type_id, "name": name}
+            for type_id, name in leave_service.get_available_leave_types(db).items()
+        ],
+    )
+
+
+@router.get("/history")
+def get_leave_history(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    status: LeaveHistoryStatus = "ALL",
+):
+    """List your leave requests newest first. Omit status to see all requests."""
     if not current_user.employee:
-        raise HTTPException( status_code=400, detail="Employee profile not found" )
+        raise HTTPException(status_code=400, detail="Employee profile not found")
 
-    leaves = leave_service.get_employee_leaves( current_user.employee.id, db )
+    leaves = leave_service.get_employee_leaves(
+        current_user.employee.id, db, status=None if status == "ALL" else status
+    )
+    return success_response(
+        message="Your leave history retrieved successfully",
+        data=serialize_leave_records(leaves, db),
+    )
 
+
+@router.get("/my-leaves")
+def get_my_leaves(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],):
+    if not current_user.employee:
+        raise HTTPException( status_code=400, detail="Employee profile not found", )
+    leaves = leave_service.get_employee_leaves( current_user.employee.id, db, )
     leave_data = serialize_leave_records(leaves, db)
+    balances = leave_service.get_employee_leave_balances( current_user.employee.id, leaves, db, )
 
-    balances = leave_service.get_employee_leave_balances(current_user.employee.id, leaves, db)
     return success_response(
         message="Your leave records retrieved successfully",
         data=leave_data,
@@ -70,48 +119,91 @@ def get_my_leaves( db: Annotated[Session, Depends(get_db)], current_user: Annota
                     "leave_type": balance.leave_type,
                     "total_days": balance.total_days,
                     "used_days": balance.used_days,
-                    "remaining_days": balance.total_days - balance.used_days,
+                    "remaining_days": (
+                        balance.total_days - balance.used_days
+                    ),
                 }
                 for balance in balances
             ]
         },
     )
-
-
 @router.get("/")
-def get_all_leaves( db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
+def get_all_leaves(
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],):
     leaves = leave_service.get_all_leaves(db)
-
     leave_data = serialize_leave_records(leaves, db)
 
-    return success_response( message="All leave records retrieved successfully", data=leave_data, status_code=status.HTTP_200_OK )
+    return success_response( message="All leave records retrieved successfully", data=leave_data, status_code=status.HTTP_200_OK, )
 
 
-@router.patch("/{leave_id}/review")
-def review_leave( leave_id: int, data: LeaveDecision, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
-
-    leave = leave_service.review_leave( leave_id, data, admin.id, db )
+@router.patch("/{leave_id}/assign")
+def assign_leave_approver(
+    leave_id: int,
+    data: LeaveAssign,
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],):
+    leave = leave_service.assign_leave_approver(
+        leave_id,
+        data.assigned_to_user_id,
+        db, )
 
     leave_data = LeaveResponse.model_validate( leave ).model_dump(mode="json")
 
-    return success_response( message="Leave request reviewed successfully", data=leave_data, status_code=status.HTTP_200_OK )
+    return success_response( message="Leave approver assigned successfully", data=leave_data, status_code=status.HTTP_200_OK, )
+
+@router.patch("/{leave_id}/review")
+def review_leave(
+    leave_id: int,
+    data: LeaveDecision,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],):
+    leave = leave_service.review_leave(
+        leave_id,
+        data,
+        current_user.id,
+        db,
+    )
+
+    leave_data = LeaveResponse.model_validate( leave ).model_dump(mode="json")
+    return success_response( message="Leave request reviewed successfully", data=leave_data, status_code=status.HTTP_200_OK, )
+
+@router.patch("/{leave_id}/withdraw")
+def withdraw_leave(
+    leave_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Withdraw your approved leave on or before its start date and restore the balance."""
+    if current_user.employee is None:
+        raise HTTPException(status_code=400, detail="Employee profile not found")
+
+    leave = leave_service.withdraw_leave(leave_id, current_user.employee.id, db)
+    return success_response(
+        message="Leave request withdrawn successfully",
+        data=serialize_leave_records([leave], db)[0],
+    )
 
 
 @router.delete("/{leave_id}")
-def delete_leave( leave_id: int, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]):
-    
+def delete_leave(
+    leave_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],):
     leave = db.query(Leave).filter( Leave.id == leave_id ).first()
 
     if not leave:
-        raise HTTPException( status_code=404, detail="Leave request not found" )
-
-    is_admin = current_user.role.upper() in { "ADMIN", "SUPER_ADMIN" }
-
-    is_owner = ( current_user.employee is not None and current_user.employee.id == leave.employee_id )
-
+        raise HTTPException( status_code=404, detail="Leave request not found", )
+    is_admin = current_user.role.upper() in {
+        "ADMIN",
+        "SUPER_ADMIN",
+    }
+    is_owner = (
+        current_user.employee is not None
+        and current_user.employee.id == leave.employee_id
+    )
     if not is_admin and not is_owner:
-        raise HTTPException( status_code=403, detail="Permission denied" )
-
+        raise HTTPException( status_code=403, detail="Permission denied", )
     leave_service.delete_leave(leave_id, db)
 
-    return success_response( message="Leave request deleted successfully", data={}, status_code=status.HTTP_200_OK )
+    return success_response( message="Leave request deleted successfully", data={}, status_code=status.HTTP_200_OK, )

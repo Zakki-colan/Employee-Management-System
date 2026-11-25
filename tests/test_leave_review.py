@@ -6,6 +6,7 @@ import pytest
 
 from app.databased import Base
 from app.models import Department, Employee, Leave, User
+from app.models.leave_type import LeaveType
 from app.schemas.leave import LeaveDecision
 from app.services.leave_service import review_leave
 
@@ -53,7 +54,8 @@ def test_super_admin_without_employee_can_review_leave(decision_status):
             )
             leave = Leave(
                 employee=employee,
-                leave_type="Casual",
+                leave_type_detail=LeaveType(name="Casual Leave"),
+                assigned_to_user_id=super_admin.id,
                 start_date=datetime(2026, 11, 16),
                 end_date=datetime(2026, 11, 17),
                 reason="Personal work",
