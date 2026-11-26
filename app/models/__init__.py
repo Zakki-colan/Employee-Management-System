@@ -8,3 +8,4 @@ from app.models.leave_balance import LeaveBalance
 from app.models.holiday import Holiday
 from app.models.employee_document import EmployeeDocument
 from app.models.leave_type import LeaveType
+from app.models.employee_promotion import EmployeePromotion

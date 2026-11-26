@@ -1,62 +1,54 @@
+from unittest.mock import patch
 
-import os
 import pytest
-
-from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
-load_dotenv()
-
-from app.main import app
-from app.databased import Base, get_db
-
-from app.models.user import User
-from app.models.attendance import Attendance
-from app.models.department import Department
-from app.models.employee import Employee
-from app.models.leave import Leave
-
-
-# Use your existing EMS database
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL environment variable is not set.")
-
-test_engine = create_engine(DATABASE_URL)
-
-TestingSessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=test_engine
-)
+with patch.dict(
+    "os.environ",
+    {
+        "DATABASE_URL": "sqlite://",
+        "SECRET_KEY": "local-test-signing-key",
+        "ALGORITHM": "HS256",
+    },
+):
+    from app.databased import Base, get_db
+    from app.main import app
+    from app.models.leave_type import LeaveType
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def db_session():
-    db = TestingSessionLocal()
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    @event.listens_for(engine, "connect")
+    def enable_foreign_keys(connection, _):
+        connection.execute("PRAGMA foreign_keys=ON")
 
     try:
-        yield db
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            db.add(LeaveType(id=2, name="Casual Leave"))
+            db.commit()
+            yield db
     finally:
-        db.close()
+        engine.dispose()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def client(db_session):
-
     def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
+        yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-
     try:
         with TestClient(app) as test_client:
             yield test_client
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_db, None)

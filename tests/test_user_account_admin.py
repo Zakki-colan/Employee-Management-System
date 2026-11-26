@@ -36,7 +36,7 @@ def test_only_admin_roles_can_register_users(client, db_session):
 
     try:
         registration_data = {
-            "username": f"new-user-{unique}",
+            "username": "New Test User",
             "email": f"new-user-{unique}@example.com",
             "password": "valid-test-password",
         }
@@ -57,19 +57,19 @@ def test_only_admin_roles_can_register_users(client, db_session):
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert admin_registration.status_code == 201
-        assert admin_registration.json()["role"] == "EMPLOYEE"
+        assert admin_registration.json()["data"]["role"] == "EMPLOYEE"
 
         super_admin_registration = client.post(
             "/auth/register",
             json={
-                "username": f"super-created-{unique}",
+                "username": "Super Created User",
                 "email": f"super-created-{unique}@example.com",
                 "password": "valid-test-password",
             },
             headers={"Authorization": f"Bearer {super_admin_token}"},
         )
         assert super_admin_registration.status_code == 201
-        assert super_admin_registration.json()["role"] == "EMPLOYEE"
+        assert super_admin_registration.json()["data"]["role"] == "EMPLOYEE"
     finally:
         db_session.rollback()
         db_session.query(User).filter(

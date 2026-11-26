@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from app.models.employee import Employee
 from app.models.department import Department
+from app.models.leave_balance import LeaveBalance
 from app.models.user import User
 from app.schemas.employee import (
     EmployeeCreate,
@@ -86,120 +87,40 @@ def create_employee(data: EmployeeCreate, db: Session):
 
 
 
-def update_employee(
-    employee_id: int,
-    data: EmployeeUpdate,
-    db: Session
-):
-    employee = get_employee_by_id(employee_id, db)
-
-    department = db.query(Department).filter(
-        Department.id == data.department_id
-    ).first()
-
-    if not department:
-        raise HTTPException(
-            status_code=404,
-            detail="Department not found"
-        )
-
-    # Check duplicate phone
-    existing_phone = db.query(Employee).filter(
-        Employee.phone == data.phone,
-        Employee.id != employee_id
-    ).first()
-
-    if existing_phone:
-        raise HTTPException(
-            status_code=400,
-            detail="Phone number already exists"
-        )
-
-    # Replace all updateable fields
-    update_data = data.model_dump()
-
-    try:
-        for key, value in update_data.items():
-            setattr(employee, key, value)
-
-        db.commit()
-        db.refresh(employee)
-
-    except Exception:
-        db.rollback()
-        raise
-
-    return employee
+def update_employee(employee_id: int, data: EmployeeUpdate, db: Session):
+    return _apply_employee_update(employee_id, data.model_dump(), db)
 
 
+def patch_employee(employee_id: int, data: EmployeePatch, db: Session):
+    return _apply_employee_update(employee_id, data.model_dump(exclude_unset=True), db)
 
-def patch_employee(
-    employee_id: int,
-    data: EmployeePatch,
-    db: Session
-):
-    employee = get_employee_by_id(employee_id, db)
-
-    # Get only the fields sent by frontend
-    update_data = data.model_dump(exclude_unset=True)
-
-    if "department_id" in update_data:
-        department = db.query(Department).filter(
-            Department.id == update_data["department_id"]
-        ).first()
-
-        if not department:
-            raise HTTPException(
-                status_code=404,
-                detail="Department not found"
-            )
-
-    if "phone" in update_data:
-        existing_phone = db.query(Employee).filter(
-            Employee.phone == update_data["phone"],
-            Employee.id != employee_id
-        ).first()
-
-        if existing_phone:
-            raise HTTPException(
-                status_code=400,
-                detail="Phone number already exists"
-            )
-
-    try:
-        for key, value in update_data.items():
-            setattr(employee, key, value)
-
-        db.commit()
-        db.refresh(employee)
-
-    except Exception:
-        db.rollback()
-        raise
-
-    return employee
 
 def update_own_profile(employee_id: int, data: EmployeeSelfUpdate, db: Session):
-    employee = get_employee_by_id(employee_id, db)
-    update_data = data.model_dump(exclude_unset=True)
+    return _apply_employee_update(employee_id, data.model_dump(exclude_unset=True), db)
 
-    if "phone" in update_data:
-        existing_phone = db.query(Employee).filter(
-            Employee.phone == update_data["phone"],
+
+def _apply_employee_update(employee_id: int, fields: dict, db: Session):
+    employee = get_employee_by_id(employee_id, db)
+
+    if "department_id" in fields and db.get(Department, fields["department_id"]) is None:
+        raise HTTPException(status_code=404, detail="Department not found")
+
+    if "phone" in fields:
+        existing_phone = db.query(Employee.id).filter(
+            Employee.phone == fields["phone"],
             Employee.id != employee_id,
         ).first()
         if existing_phone:
-            raise HTTPException(
-                status_code=400,
-                detail="This Phone number already exists"
-            )
+            raise HTTPException(status_code=400, detail="Phone number already exists")
 
-    for key, value in update_data.items():
-        setattr(employee, key, value)
-
-    db.commit()
-    db.refresh(employee)
-
+    try:
+        for key, value in fields.items():
+            setattr(employee, key, value)
+        db.commit()
+        db.refresh(employee)
+    except Exception:
+        db.rollback()
+        raise
     return employee
 
 
@@ -207,13 +128,18 @@ def delete_employee(employee_id: int, db: Session):
 
     employee = get_employee_by_id(employee_id, db)
 
-    for attendance in list(employee.attendances):
-        db.delete(attendance)
+    try:
+        for attendance in employee.attendances:
+            db.delete(attendance)
 
-    for leave in list(employee.leaves):
-        db.delete(leave)
+        for leave in employee.leaves:
+            db.delete(leave)
 
-    db.delete(employee)
-    db.commit()
+        db.query(LeaveBalance).filter_by(employee_id=employee_id).delete()
+        db.delete(employee)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {"message": "This Employee Deleted Successfully"}

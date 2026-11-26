@@ -1,12 +1,19 @@
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+RegistrationRole = Literal["EMPLOYEE", "ADMIN", "MANAGER", "HR", "PROJECT_COORDINATOR"]
+
+
 class UserRegister(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str = Field(min_length=1, max_length=50, pattern=r"^[A-Za-z ]+$", json_schema_extra={"example": "Rahul Kumar"})
     email: EmailStr
     password: str = Field(min_length=8)
+    role: RegistrationRole = Field(
+        default="EMPLOYEE",
+        description="Only a Super Admin can register an account with another role.",
+    )
 
 
 class UserAccountUpdate(BaseModel):
@@ -39,7 +46,9 @@ class UserLogin(BaseModel):
         return value.strip()
 
 class UserRoleUpdate(BaseModel):
-    role: Literal["EMPLOYEE", "ADMIN", "SUPER_ADMIN"]
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["EMPLOYEE", "ADMIN", "SUPER_ADMIN", "MANAGER", "HR", "PROJECT_COORDINATOR"]
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

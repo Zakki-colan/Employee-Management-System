@@ -1,9 +1,16 @@
-from fastapi import APIRouter, Depends, status
 from typing import Annotated
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
+
 from app.databased import get_db
 from app.models.user import User
-from app.schemas.department import ( DepartmentUpdate, DepartmentCreate, DepartmentResponse)
+from app.schemas.department import (
+    DepartmentCreate,
+    DepartmentPatch,
+    DepartmentResponse,
+    DepartmentUpdate,
+)
 from app.services import department_service
 from app.dependencies.auth import get_current_user_optional
 from app.dependencies.permissions import get_current_admin
@@ -46,12 +53,32 @@ def create_department( data: DepartmentCreate, db: Annotated[Session, Depends(ge
 
 
 @router.put("/{department_id}")
-def update_department( department_id: int, data: DepartmentUpdate, db: Annotated[Session, Depends(get_db)], admin: Annotated[User, Depends(get_current_admin)]):
-    department = department_service.update_department( department_id, data, db )
+def update_department(
+    department_id: int,
+    data: DepartmentUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],
+):
+    department = department_service.update_department(department_id, data, db)
+    return success_response(
+        message="Department updated successfully",
+        data=DepartmentResponse.model_validate(department).model_dump(mode="json"),
+        status_code=status.HTTP_200_OK,
+    )
 
-    department_data = DepartmentResponse.model_validate( department ).model_dump(mode="json")
 
-    return success_response( message="Department updated successfully", data=department_data, status_code=status.HTTP_200_OK )
+@router.patch("/{department_id}")
+def patch_department(
+    department_id: int,
+    data: DepartmentPatch,
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],
+):
+    department = department_service.update_department(department_id, data, db)
+    return success_response(
+        message="Department updated successfully",
+        data=DepartmentResponse.model_validate(department).model_dump(mode="json"),
+    )
 
 
 @router.delete("/{department_id}")

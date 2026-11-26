@@ -17,14 +17,20 @@ def test_apply_leave(client, db_session):
         is_active=True,
     )
     department = Department(name=f"Leave Test {unique}")
-    db_session.add_all([user, department])
+    approver = User(
+        username=f"approver-{unique}",
+        email=f"approver-{unique}@example.com",
+        hashed_password="test-hash",
+        role="ADMIN",
+    )
+    db_session.add_all([user, department, approver])
     db_session.commit()
 
     employee = Employee(
         full_name="Leave Test Employee",
-        phone=f"+1{uuid4().int % 10**10:010d}",
+        phone="9876543210",
         hire_date=date(2026, 1, 1),
-        position="Developer",
+        position="Junior",
         salary=50000,
         department_id=department.id,
         user_id=user.id,
@@ -46,6 +52,7 @@ def test_apply_leave(client, db_session):
                 "start_date": leave_date.isoformat(),
                 "end_date": leave_date.isoformat(),
                 "reason": "Personal work",
+                "assigned_to_user_id": approver.id,
             },
             headers={"Authorization": f"Bearer {token}"},
         )
@@ -60,5 +67,6 @@ def test_apply_leave(client, db_session):
         ).delete(synchronize_session=False)
         db_session.delete(employee)
         db_session.delete(user)
+        db_session.delete(approver)
         db_session.delete(department)
         db_session.commit()

@@ -11,16 +11,18 @@ from app.utils.response import success_response
 
 router = APIRouter()
 
-@router.post("/register")
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(
     data: UserRegister,
     db: Annotated[Session, Depends(get_db)],
-    admin: Annotated[User, Depends(get_current_admin)]):
-
-    user = register_user(data, db)
-    user_data = UserResponse.model_validate( user ).model_dump(mode="json")
-
-    return success_response( message="User registered successfully", status_code=status.HTTP_201_CREATED, data=user_data )
+    admin: Annotated[User, Depends(get_current_admin)],
+):
+    user = register_user(data, db, admin)
+    return success_response(
+        message="User registered successfully",
+        status_code=status.HTTP_201_CREATED,
+        data=UserResponse.model_validate(user).model_dump(mode="json"),
+    )
 
 
 @router.post("/login")

@@ -1,11 +1,18 @@
 from datetime import datetime, date
 from sqlalchemy import (
-    String, Integer, DateTime, Date, ForeignKey, Text, func)
+    CheckConstraint, String, Integer, Numeric, DateTime, Date, ForeignKey, Text, func)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.databased import Base
 
 class Leave(Base):
     __tablename__ = "leaves"
+    __table_args__ = (
+        CheckConstraint(
+            "half_day_session IS NULL OR "
+            "(half_day_session IN (1, 2) AND start_date = end_date AND leave_days = 0.5)",
+            name="ck_leaves_half_day_session",
+        ),
+    )
 
     id: Mapped[int] = mapped_column( Integer, primary_key=True, index=True )
 
@@ -17,7 +24,10 @@ class Leave(Base):
     
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
 
-    leave_days: Mapped[int] = mapped_column( Integer, nullable=False, default=0, server_default="0" )
+    leave_days: Mapped[float] = mapped_column(
+        Numeric(11, 1, asdecimal=False), nullable=False, default=0, server_default="0"
+    )
+    half_day_session: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 

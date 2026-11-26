@@ -10,7 +10,7 @@ INDIA_TZ = ZoneInfo("Asia/Kolkata")
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc).replace(microsecond=0)
+    return datetime.now(timezone.utc)
 
 def local_now() -> datetime:
     return datetime.now(INDIA_TZ).replace(microsecond=0)
@@ -46,8 +46,8 @@ def check_in(employee_id: int, db: Session):
 
     if not employee:
         raise HTTPException( status_code=404, detail="Employee Not Found" )
-    current_time = local_now()
-    today = current_time.date()
+    current_time = utc_now()
+    today = current_time.astimezone(INDIA_TZ).date()
 
     open_attendance = db.query(Attendance).filter(
         Attendance.employee_id == employee_id,
@@ -57,7 +57,6 @@ def check_in(employee_id: int, db: Session):
     if open_attendance:
         raise HTTPException( status_code=400, detail="Please complete your previous check-out first." )
 
-    current_time = utc_now()
     attendance = Attendance( employee_id=employee_id, date=today, check_in=current_time, status="PRESENT")
 
     try:

@@ -4,6 +4,8 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
+from fastapi.responses import HTMLResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import models
@@ -15,6 +17,7 @@ from app.routers import (
     dashboard,
     leaves,
     employee_document,
+    employee_promotion,
 )
 from app.utils.response import error_response
 
@@ -25,9 +28,10 @@ app = FastAPI(
     title="Employee Management System(EMS)",
     description=(
         "A smart API for workforce management, employee records, "
-        "leave tracking, and attendance."
+        "leave tracking, attendance, and promotions."
     ),
     version="1.0.0",
+    docs_url=None,
 )
 
 app.add_middleware(
@@ -40,6 +44,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_docs(request: Request):
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    docs = get_swagger_ui_html(
+        openapi_url=f"{root_path}{app.openapi_url}",
+        title=f"{app.title} - Swagger UI",
+        oauth2_redirect_url=f"{root_path}/docs/oauth2-redirect",
+    )
+    # Keep Swagger's enum and default for the status control while hiding its duplicate labels.
+    styles = """
+    <style>
+      #operations-Leaves-get_leave_history_leaves_history_get :is(
+        .parameters thead,
+        tr[data-param-name="status"][data-param-in="query"] .parameters-col_name,
+        tr[data-param-name="status"][data-param-in="query"] .parameter__enum,
+        tr[data-param-name="status"][data-param-in="query"] .parameter__default,
+        tr[data-param-name="status"][data-param-in="query"] select option[value=""]
+      ) {
+        display: none;
+      }
+    </style>
+    """
+    return HTMLResponse(bytes(docs.body).decode().replace("</head>", f"{styles}</head>", 1))
+
+
+@app.get("/docs/oauth2-redirect", include_in_schema=False)
+async def swagger_oauth2_redirect():
+    return get_swagger_ui_oauth2_redirect_html()
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -99,10 +133,7 @@ app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(employees.router, prefix="/employees", tags=["Employees"])
 app.include_router(departments.router, prefix="/departments", tags=["Department"])
 app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
+app.include_router( employee_promotion.router, prefix="/employees", tags=["Employee Promotions"],)
 app.include_router(leaves.router, prefix="/leaves", tags=["Leaves"])
-app.include_router(
-    employee_document.router,
-    prefix="/document",
-    tags=["Employee Documents"],
-)
+app.include_router( employee_document.router, prefix="/document", tags=["Employee Documents"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])

@@ -1,14 +1,26 @@
-from fastapi import HTTPException
-from sqlalchemy.orm import Session, joinedload
-from app.models.leave import Leave
-from app.models.leave_type import LeaveType
-from app.models.leave_balance import LeaveBalance
-from app.models.employee import Employee
-from app.schemas.leave import LeaveCreate, LeaveDecision, LeaveStatus
 from datetime import date, timedelta
+
+from fastapi import HTTPException
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, joinedload
+
+from app.models.employee import Employee
 from app.models.holiday import Holiday
+from app.models.leave import Leave
+from app.models.leave_balance import LeaveBalance
+from app.models.leave_type import LeaveType
+from app.models.user import User
+from app.schemas.leave import LeaveCreate, LeaveDecision, LeaveStatus
 from app.services.attendance_service import local_now
 
+
+LEAVE_APPROVER_ROLES = {
+    "ADMIN",
+    "SUPER_ADMIN",
+    "MANAGER",
+    "HR",
+    "PROJECT_COORDINATOR",
+}
 
 # Annual allowances in working days, used when an employee has no saved balance.
 DEFAULT_LEAVE_DAYS = {
@@ -61,6 +73,33 @@ def get_leave_balance(
     return default_leave_balance(employee_id, leave_type, year, accepted_leaves, db)
 
 
+def get_leave_approvers(requester_id: int, db: Session):
+    return (
+        db.query(User.id, User.username, User.role)
+        .filter(
+            User.id != requester_id,
+            User.is_active.is_(True),
+            func.upper(func.trim(User.role)).in_(LEAVE_APPROVER_ROLES),
+        )
+        .order_by(User.username, User.id)
+        .all()
+    )
+
+
+def validate_leave_approver(approver_id: int, requester_id: int, db: Session):
+    approver = db.get(User, approver_id)
+    if approver is None:
+        raise HTTPException(status_code=404, detail="Approver not found")
+    if approver.id == requester_id:
+        raise HTTPException(status_code=400, detail="You cannot approve your own leave")
+    if not approver.is_active:
+        raise HTTPException(status_code=400, detail="Selected approver account is inactive")
+    if approver.role.strip().upper() not in LEAVE_APPROVER_ROLES:
+        raise HTTPException(
+            status_code=400, detail="Selected user is not an authorized leave approver"
+        )
+
+
 class InvalidLeaveType(HTTPException):
     def __init__(self, available_types: dict[int, str]):
         super().__init__(status_code=400, detail="Invalid or inactive leave type ID")
@@ -81,7 +120,6 @@ def get_available_leave_types(db: Session) -> dict[int, str]:
 
 
 def apply_leave(employee_id: int, data: LeaveCreate, db: Session):
-
     employee = db.query(Employee).filter(
         Employee.id == employee_id
     ).with_for_update().first()
@@ -97,38 +135,51 @@ def apply_leave(employee_id: int, data: LeaveCreate, db: Session):
     if leave_type_name is None:
         raise InvalidLeaveType(available_types)
 
-    existing = db.query(Leave).filter(
+    overlapping_leaves = db.query(Leave.id).filter(
         Leave.employee_id == employee_id,
         Leave.start_date <= data.end_date,
         Leave.end_date >= data.start_date,
-        Leave.status.in_(["PENDING", "ACCEPTED"]), ).first()
+        Leave.status.in_(["PENDING", "ACCEPTED"]),
+    )
+    if data.half_day_session is not None:
+        overlapping_leaves = overlapping_leaves.filter(
+            or_(
+                Leave.half_day_session.is_(None),
+                Leave.half_day_session == data.half_day_session,
+            )
+        )
 
-    if existing:
-        raise HTTPException( status_code=400, detail="You already have a leave request for these dates", )
+    if overlapping_leaves.first():
+        raise HTTPException(
+            status_code=400, detail="You already have a leave request for these dates"
+        )
 
     if data.start_date.year != data.end_date.year:
-        raise HTTPException( status_code=400, detail="Leave requests across different years are not supported", )
+        raise HTTPException(
+            status_code=400, detail="Leave requests across different years are not supported"
+        )
 
-    leave_days = calculate_leave_days(
-        data.start_date,
-        data.end_date,
-        db, )
+    leave_days = calculate_leave_days(data.start_date, data.end_date, db)
 
     if leave_days == 0:
-        raise HTTPException( status_code=400, detail="Selected dates do not contain any working days", )
+        raise HTTPException(
+            status_code=400, detail="Selected dates do not contain any working days"
+        )
 
-    balance_leave_type = leave_type_for_balance(leave_type_name)
+    if data.half_day_session is not None:
+        leave_days = 0.5
 
-    balance = get_leave_balance(
-        employee_id,
-        balance_leave_type,
-        data.start_date.year,
-        db, )
+    balance_type = leave_type_for_balance(leave_type_name)
+    balance = get_leave_balance(employee_id, balance_type, data.start_date.year, db)
 
     available_days = balance.total_days - balance.used_days
 
     if leave_days > available_days:
-        raise HTTPException( status_code=400, detail=f"Insufficient leave balance. Available days: {available_days}", )
+        raise HTTPException(
+            status_code=400, detail=f"Insufficient leave balance. Available days: {available_days}"
+        )
+
+    validate_leave_approver(data.assigned_to_user_id, employee.user_id, db)
 
     leave = Leave(
         employee_id=employee_id,
@@ -137,8 +188,9 @@ def apply_leave(employee_id: int, data: LeaveCreate, db: Session):
         end_date=data.end_date,
         reason=data.reason,
         leave_days=leave_days,
+        half_day_session=data.half_day_session,
         status="PENDING",
-        assigned_to_user_id=None,
+        assigned_to_user_id=data.assigned_to_user_id,
         approved_by=None,
     )
 
@@ -147,6 +199,7 @@ def apply_leave(employee_id: int, data: LeaveCreate, db: Session):
     db.refresh(leave)
 
     return leave
+
 
 def get_employee_leaves(
     employee_id: int, db: Session, *, status: LeaveStatus | None = None
@@ -157,6 +210,7 @@ def get_employee_leaves(
     if status is not None:
         query = query.filter(Leave.status == status)
     return query.order_by(Leave.created_at.desc(), Leave.id.desc()).all()
+
 
 def get_employee_leave_balances(
     employee_id: int, leaves: list[Leave], db: Session
@@ -174,38 +228,10 @@ def get_employee_leave_balances(
                 )
     return sorted(balances.values(), key=lambda balance: (-balance.year, balance.leave_type))
 
+
 def get_all_leaves(db: Session):
     return db.query(Leave).all()
 
-def assign_leave_approver(
-    leave_id: int, assigned_to_user_id: int, db: Session,):
-    from app.models.user import User
-    leave = db.query(Leave).filter(Leave.id == leave_id).with_for_update().first()
-    if not leave:
-        raise HTTPException(status_code=404, detail="Leave request not found")
-    if leave.status != "PENDING":
-        raise HTTPException( status_code=400, detail="Only pending leave requests can be assigned", )
-    approver = db.query(User).filter(
-        User.id == assigned_to_user_id
-    ).first()
-    if not approver:
-        raise HTTPException(status_code=404, detail="Approver not found")
-    if not approver.is_active:
-        raise HTTPException( status_code=400, detail="Selected approver account is inactive", )
-
-    allowed_roles = {
-        "ADMIN",
-        "SUPER_ADMIN",
-        "MANAGER",
-        "HR",
-        "PROJECT_COORDINATOR",
- }
-    if approver.role.strip().upper() not in allowed_roles:
-        raise HTTPException( status_code=400, detail="Selected user is not an authorized leave approver", )
-    leave.assigned_to_user_id = approver.id
-    db.commit()
-    db.refresh(leave)
-    return leave
 
 def lock_leave_for_balance_change(leave_id: int, db: Session) -> Leave:
     employee_id = db.query(Leave.employee_id).filter(
@@ -249,6 +275,7 @@ def review_leave(leave_id: int, data: LeaveDecision, approver_user_id: int, db: 
             status_code=403,
             detail="You are not assigned to review this leave",
         )
+    validate_leave_approver(approver_user_id, leave.employee.user_id, db)
     if data.status == "ACCEPTED":
         leave_type = leave_type_for_balance(leave.leave_type)
         if leave_type not in DEFAULT_LEAVE_DAYS:

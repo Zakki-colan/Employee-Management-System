@@ -10,12 +10,25 @@ from app.models.refresh_token import RefreshToken
 from app.utils.security import ( hash_password, verify_password, create_access_token, create_refresh_token, hash_refresh_token, get_refresh_token_expiry)
 
 
-def register_user(data: UserRegister, db: Session):
-    exister_user = db.query(User).filter(
-        (User.email == data.email ) | (User.username == data.username)
+def register_user(data: UserRegister, db: Session, actor: User):
+    if data.role != "EMPLOYEE" and actor.role.upper() != "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=403,
+            detail="Only a Super Admin can register a user with this role",
+        )
+
+    existing_user = db.query(User).filter(
+        (User.email == data.email) | (User.username == data.username)
     ).first()
-    if exister_user: raise HTTPException(status_code=400, detail="The Username or email already exists")
-    user = User(username=data.username, email=data.email, hashed_password=hash_password(data.password), role="EMPLOYEE")
+    if existing_user:
+        raise HTTPException(status_code=400, detail="The Username or email already exists")
+
+    user = User(
+        username=data.username,
+        email=data.email,
+        hashed_password=hash_password(data.password),
+        role=data.role,
+    )
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -222,7 +235,11 @@ def refresh_access_token(token: str, db: Session):
 
     if stored_token.revoked_at is not None:
         raise HTTPException( status_code=401, detail="Refresh token has been revoked" )
-    if stored_token.expires_at <= now:
+    expires_at = stored_token.expires_at
+    if expires_at.tzinfo is None:
+        # SQLite drops the timezone from stored UTC timestamps.
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
         raise HTTPException( status_code=401, detail="Refresh token has expired" )
     user = db.query(User).filter( User.id == stored_token.user_id ).first()
 

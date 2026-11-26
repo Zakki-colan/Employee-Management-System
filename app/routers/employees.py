@@ -133,30 +133,6 @@ def update_employee(
     )
 
 
-@router.patch("/{employee_id}")
-def patch_employee(
-    employee_id: int,
-    data: EmployeePatch,
-    db: Annotated[Session, Depends(get_db)],
-    admin: Annotated[User, Depends(get_current_admin)],
-):
-    employee = employee_service.patch_employee(
-        employee_id,
-        data,
-        db,
-    )
-
-    employee_data = EmployeeResponse.model_validate(
-        employee
-    ).model_dump(mode="json")
-
-    return success_response(
-        message="Employee updated successfully",
-        data=employee_data,
-        status_code=status.HTTP_200_OK,
-    )
-
-
 @router.patch("/me")
 def update_my_profile(
     data: EmployeeSelfUpdate,
@@ -181,6 +157,30 @@ def update_my_profile(
 
     return success_response(
         message="Your profile updated successfully",
+        data=employee_data,
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.patch("/{employee_id}")
+def patch_employee(
+    employee_id: int,
+    data: EmployeePatch,
+    db: Annotated[Session, Depends(get_db)],
+    admin: Annotated[User, Depends(get_current_admin)],
+):
+    employee = employee_service.patch_employee(
+        employee_id,
+        data,
+        db,
+    )
+
+    employee_data = EmployeeResponse.model_validate(
+        employee
+    ).model_dump(mode="json")
+
+    return success_response(
+        message="Employee updated successfully",
         data=employee_data,
         status_code=status.HTTP_200_OK,
     )

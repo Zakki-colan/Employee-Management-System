@@ -112,6 +112,7 @@ def test_employee_receives_automatic_annual_leave_allowances(monkeypatch):
                 "start_date": leave_date.isoformat(),
                 "end_date": holiday_date.isoformat(),
                 "reason": "Personal appointment",
+                "assigned_to_user_id": admin_id,
             }
             for invalid_id in (0, 10, 11, 99):
                 invalid = client.post(
@@ -152,12 +153,7 @@ def test_employee_receives_automatic_annual_leave_allowances(monkeypatch):
             assert pending.status_code == 200
             assert [record["id"] for record in pending.json()["data"]] == [leave_id]
 
-            assignment = client.patch(
-                f"/leaves/{leave_id}/assign",
-                json={"assigned_to_user_id": admin_id},
-                headers=headers,
-            )
-            assert assignment.status_code == 200
+            assert leave_response.json()["data"]["assigned_to_user_id"] == admin_id
             review = client.patch(
                 f"/leaves/{leave_id}/review",
                 json={"status": "ACCEPTED"},

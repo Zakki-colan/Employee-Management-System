@@ -7,7 +7,7 @@ from app.databased import Base, get_db
 from app.dependencies.auth import get_current_user
 from app.main import app
 from app.models import Department, Employee, User
-from app.schemas.employee import (EmployeePosition)
+from app.schemas.employee import EmployeePosition
 
 
 def test_employee_can_only_update_own_contact_profile():
@@ -31,9 +31,9 @@ def test_employee_can_only_update_own_contact_profile():
     db.flush()
     employee = Employee(
         full_name="Original Name",
-        phone="+12345678901",
+        phone="9876543211",
         hire_date=date(2026, 1, 1),
-        position=EmployeePosition,
+        position=EmployeePosition.JUNIOR.value,
         salary=50000,
         department_id=department.id,
         user_id=user.id,
@@ -49,9 +49,9 @@ def test_employee_can_only_update_own_contact_profile():
     db.flush()
     other_employee = Employee(
         full_name="Other Employee",
-        phone="+12345678903",
+        phone="9876543213",
         hire_date=date(2026, 1, 1),
-        position="Designer",
+        position=EmployeePosition.OTHER.value,
         salary=50000,
         department_id=department.id,
         user_id=other_user.id,
@@ -72,12 +72,12 @@ def test_employee_can_only_update_own_contact_profile():
         with TestClient(app) as client:
             own_profile = client.get(f"/employees/{employee.id}")
             assert own_profile.status_code == 200
-            own_profile_data = own_profile.json()
+            own_profile_data = own_profile.json()["data"]
             assert own_profile_data["id"] == employee.id
             assert own_profile_data["full_name"] == "Original Name"
-            assert own_profile_data["phone_number"] == "+12345678901"
+            assert own_profile_data["phone_number"] == "9876543211"
             assert own_profile_data["hire_date"] == "2026-01-01"
-            assert own_profile_data["position"] == EmployeePosition
+            assert own_profile_data["position"] == EmployeePosition.JUNIOR.value
             assert own_profile_data["salary"] == "50000.00"
             assert own_profile_data["department"] == {
                 "id": department.id,
@@ -90,25 +90,28 @@ def test_employee_can_only_update_own_contact_profile():
 
             updated = client.patch(
                 "/employees/me",
-                json={"full_name": "Updated Name", "phone": "+10987654321"},
+                json={"full_name": "Updated Name", "phone": "9876543215"},
             )
             assert updated.status_code == 200
-            assert updated.json()["full_name"] == "Updated Name"
-            assert updated.json()["phone_number"] == "+10987654321"
+            assert updated.json()["data"]["full_name"] == "Updated Name"
+            assert updated.json()["data"]["phone_number"] == "9876543215"
+
+            persisted = client.get(f"/employees/{employee.id}")
+            assert persisted.json()["data"]["phone_number"] == "9876543215"
 
             forbidden_field = client.patch(
                 "/employees/me",
                 json={"salary": 1},
             )
-            assert forbidden_field.status_code == 422
+            assert forbidden_field.status_code == 400
 
             create_employee = client.post(
                 "/employees/",
                 json={
                     "full_name": "Unauthorized Employee",
-                    "phone": "+12345678902",
+                    "phone": "9876543212",
                     "hire_date": "2026-01-01",
-                    "position": EmployeePosition,
+                    "position": EmployeePosition.JUNIOR.value,
                     "salary": 50000,
                     "department_id": employee.department_id,
                     "user_id": user.id,
@@ -119,7 +122,7 @@ def test_employee_can_only_update_own_contact_profile():
             register_user = client.post(
                 "/auth/register",
                 json={
-                    "username": "unauthorized-user",
+                    "username": "Unauthorized User",
                     "email": "unauthorized-user@example.com",
                     "password": "valid-test-password",
                 },
@@ -167,7 +170,7 @@ def test_admin_can_list_employees_with_existing_custom_positions():
     db.flush()
     employee = Employee(
         full_name="Custom Position Employee",
-        phone="+12345678904",
+        phone="9876543214",
         hire_date=date(2026, 1, 1),
         position="Team Leader",
         salary=50000,
@@ -209,7 +212,7 @@ def test_admin_can_list_employees_with_existing_custom_positions():
             response = client.get("/employees/")
 
             assert response.status_code == 200
-            result = response.json()
+            result = response.json()["data"]
             assert result["page"] == 1
             assert result["page_size"] == 10
             assert result["total"] == 2
@@ -218,7 +221,7 @@ def test_admin_can_list_employees_with_existing_custom_positions():
 
             first_page = client.get("/employees/", params={"page": 1, "page_size": 1})
             assert first_page.status_code == 200
-            first = first_page.json()
+            first = first_page.json()["data"]
             assert first["total_pages"] == 2
             assert first["previous_page"] is None
             assert first["next_page"] == 2
@@ -228,7 +231,7 @@ def test_admin_can_list_employees_with_existing_custom_positions():
                 "/employees/", params={"page": first["next_page"], "page_size": first["page_size"]}
             )
             assert second_page.status_code == 200
-            second = second_page.json()
+            second = second_page.json()["data"]
             assert second["page"] == 2
             assert second["previous_page"] == 1
             assert second["next_page"] is None
@@ -236,9 +239,9 @@ def test_admin_can_list_employees_with_existing_custom_positions():
 
             past_end = client.get("/employees/", params={"page": 3, "page_size": 1})
             assert past_end.status_code == 200
-            assert past_end.json()["items"] == []
-            assert client.get("/employees/", params={"page": 0}).status_code == 422
-            assert client.get("/employees/", params={"page_size": 101}).status_code == 422
+            assert past_end.json()["data"]["items"] == []
+            assert client.get("/employees/", params={"page": 0}).status_code == 400
+            assert client.get("/employees/", params={"page_size": 101}).status_code == 400
     finally:
         app.dependency_overrides.clear()
         db.close()

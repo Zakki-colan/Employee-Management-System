@@ -222,7 +222,9 @@ def test_admin_cannot_assign_admin_role_during_registration():
                     },
                     headers={"Authorization": f"Bearer {token}"},
                 )
-                assert response.status_code == 422
+                assert response.status_code == 403
+                assert response.json()["message"] == "Only a Super Admin can register a user with this role"
+                assert db.query(User).filter_by(email="should-not-be-created@example.com").first() is None
         finally:
             app.dependency_overrides.clear()
 
