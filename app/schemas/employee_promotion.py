@@ -1,9 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
-
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
-
 from app.schemas.employee import EmployeePosition
 
 
