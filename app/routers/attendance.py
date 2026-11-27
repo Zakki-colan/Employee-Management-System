@@ -49,7 +49,10 @@ def get_my_attendance(
     current_user: Annotated[User, Depends(get_current_user)]):
     employee_id = get_employee_id(current_user)
 
-    attendances = [ attendance for attendance in attendance_service.get_all_attendance(db) if attendance.employee_id == employee_id ]
+    attendances = attendance_service.get_all_attendance(
+        db,
+        employee_id=employee_id,
+    )
 
     attendance_data = [ AttendanceResponse.model_validate(attendance).model_dump( mode="json" ) for attendance in attendances ]
 

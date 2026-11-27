@@ -105,12 +105,16 @@ def check_out(employee_id: int, db: Session):
 
     return attendance
 
-def get_all_attendance(db: Session):
+def get_all_attendance(db: Session, employee_id: int | None = None):
+    query = db.query(Attendance)
 
-    return db.query(Attendance).order_by(
+    if employee_id is not None:
+        query = query.filter(Attendance.employee_id == employee_id)
+
+    return query.order_by(
         Attendance.date.desc(),
-        Attendance.id.desc() ).all()
-
+        Attendance.id.desc(),
+    ).all()
 
 def get_attendance_by_date(attendance_date: date, db: Session):
 

@@ -18,6 +18,7 @@ from app.routers import (
     leaves,
     employee_document,
     employee_promotion,
+    holidays
 )
 from app.utils.response import error_response
 
@@ -136,4 +137,5 @@ app.include_router(attendance.router, prefix="/attendance", tags=["Attendance"])
 app.include_router( employee_promotion.router, prefix="/employees", tags=["Employee Promotions"],)
 app.include_router(leaves.router, prefix="/leaves", tags=["Leaves"])
 app.include_router( employee_document.router, prefix="/document", tags=["Employee Documents"])
+app.include_router(holidays.router, prefix="/holidays", tags=["Holiday Management"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
